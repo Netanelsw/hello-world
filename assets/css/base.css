@@ -1,0 +1,154 @@
+/* ============================================================
+   KIBEERI — BASE STYLES
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  font-size: 16px;
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ----------------------------------------------------------
+   TYPOGRAPHY SCALE
+---------------------------------------------------------- */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+}
+
+h1 { font-size: var(--text-hero); }
+h2 { font-size: var(--text-4xl); }
+h3 { font-size: var(--text-3xl); }
+h4 { font-size: var(--text-2xl); }
+h5 { font-size: var(--text-xl); }
+h6 { font-size: var(--text-lg); }
+
+p {
+  line-height: var(--leading-normal);
+  color: var(--color-text-secondary);
+}
+
+p + p { margin-top: var(--space-4); }
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: opacity var(--dur-base) var(--ease-out-expo);
+}
+
+a:hover { opacity: 0.75; }
+
+strong { font-weight: var(--weight-semibold); color: var(--color-text-primary); }
+
+code, pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* ----------------------------------------------------------
+   LABEL UTILITY
+---------------------------------------------------------- */
+
+.label {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.label--secondary { color: var(--color-secondary); }
+.label--muted     { color: var(--color-text-tertiary); }
+
+/* ----------------------------------------------------------
+   SELECTION
+---------------------------------------------------------- */
+
+::selection {
+  background: var(--color-accent);
+  color: #000;
+}
+
+/* ----------------------------------------------------------
+   SCROLLBAR
+---------------------------------------------------------- */
+
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-pill); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-tertiary); }
+
+/* ----------------------------------------------------------
+   FOCUS
+---------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* ----------------------------------------------------------
+   IMAGES & MEDIA
+---------------------------------------------------------- */
+
+img, svg { display: block; max-width: 100%; }
+
+/* ----------------------------------------------------------
+   LISTS
+---------------------------------------------------------- */
+
+ul, ol { list-style: none; }
+
+/* ----------------------------------------------------------
+   BUTTONS RESET
+---------------------------------------------------------- */
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+/* ----------------------------------------------------------
+   INPUTS RESET
+---------------------------------------------------------- */
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ----------------------------------------------------------
+   HR
+---------------------------------------------------------- */
+
+hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+}

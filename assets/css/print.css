@@ -1,0 +1,294 @@
+/* ============================================================
+   KIBEERI — PRINT / PDF / SLIDE EXPORT
+   16:9 landscape layout for each section
+   ============================================================ */
+
+@media print {
+
+  /* ----------------------------------------------------------
+     PAGE SIZE — 16:9 landscape
+  ---------------------------------------------------------- */
+
+  @page {
+    size: 11in 6.1875in;
+    margin: 0;
+  }
+
+  /* ----------------------------------------------------------
+     COLOR SYSTEM — dark-to-light inversion
+  ---------------------------------------------------------- */
+
+  :root {
+    --color-bg-primary:    #FFFFFF;
+    --color-bg-surface:    #F5F7FA;
+    --color-bg-elevated:   #EDF0F5;
+    --color-bg-card:       #F0F3F8;
+    --color-border:        #D6DCE8;
+    --color-border-subtle: #E4E9F2;
+
+    --color-accent:        #007A6E;
+    --color-accent-dim:    rgba(0, 122, 110, 0.08);
+    --color-secondary:     #4A47B5;
+    --color-secondary-dim: rgba(74, 71, 181, 0.08);
+    --color-success:       #027A48;
+    --color-success-dim:   rgba(2, 122, 72, 0.08);
+    --color-danger:        #C01324;
+    --color-danger-dim:    rgba(192, 19, 36, 0.08);
+
+    --color-text-primary:   #0F1117;
+    --color-text-secondary: #4A5268;
+    --color-text-tertiary:  #8A94A8;
+    --color-text-accent:    #007A6E;
+
+    --glow-accent:    none;
+    --glow-accent-lg: none;
+    --glow-secondary: none;
+    --shadow-sm:      none;
+    --shadow-md:      none;
+    --shadow-lg:      none;
+  }
+
+  /* ----------------------------------------------------------
+     RESET ANIMATIONS
+  ---------------------------------------------------------- */
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+  }
+
+  /* ----------------------------------------------------------
+     GLOBAL BODY
+  ---------------------------------------------------------- */
+
+  body {
+    background: #FFFFFF;
+    color: #0F1117;
+    font-size: 10pt;
+  }
+
+  /* ----------------------------------------------------------
+     HIDE SCREEN-ONLY ELEMENTS
+  ---------------------------------------------------------- */
+
+  .nav,
+  .btn--ghost,
+  input[type="range"],
+  .slider-ticks,
+  .tier-bars,
+  .tier-slider__label,
+  .hero-bg {
+    display: none !important;
+  }
+
+  /* ----------------------------------------------------------
+     SECTION = ONE SLIDE PAGE
+  ---------------------------------------------------------- */
+
+  .section,
+  .section--first,
+  .section--dark {
+    width: 11in;
+    height: 6.1875in;
+    padding: 0.5in 0.65in;
+    page-break-before: always;
+    break-before: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: #FFFFFF;
+    border-top: none;
+  }
+
+  .section--first {
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+
+  .section--dark {
+    background: #F5F7FA;
+  }
+
+  /* ----------------------------------------------------------
+     TYPOGRAPHY SCALE FOR PRINT
+  ---------------------------------------------------------- */
+
+  :root {
+    --text-hero: 40pt;
+    --text-6xl:  34pt;
+    --text-5xl:  28pt;
+    --text-4xl:  22pt;
+    --text-3xl:  18pt;
+    --text-2xl:  15pt;
+    --text-xl:   13pt;
+    --text-lg:   11pt;
+    --text-base: 10pt;
+    --text-sm:    9pt;
+    --text-xs:    8pt;
+  }
+
+  h1 { font-size: 36pt; }
+  h2 { font-size: 24pt; }
+  h3 { font-size: 18pt; }
+
+  /* ----------------------------------------------------------
+     FIX HIDDEN STATES
+  ---------------------------------------------------------- */
+
+  /* All reveal elements must be visible in print */
+  [data-reveal],
+  [data-reveal-left],
+  [data-reveal-right],
+  [data-reveal-scale],
+  [data-reveal-stagger] > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Bars: undo GSAP scaleY(0) state */
+  .bar-fill {
+    transform: scaleY(1) !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .tier-bar__fill {
+    transform: scaleY(1) !important;
+  }
+
+  /* SVG map dots visible */
+  .geo-dot,
+  .country-highlight,
+  .geo-label {
+    opacity: 1 !important;
+  }
+
+  /* Arch connectors visible */
+  .arch-connector {
+    stroke-dashoffset: 0 !important;
+    opacity: 0.6 !important;
+  }
+
+  /* ----------------------------------------------------------
+     EXPAND ALL ACCORDIONS
+  ---------------------------------------------------------- */
+
+  .layer__body {
+    grid-template-rows: 1fr !important;
+  }
+
+  .layer__chevron {
+    display: none;
+  }
+
+  /* ----------------------------------------------------------
+     SHOW PRINT-ONLY ELEMENTS
+  ---------------------------------------------------------- */
+
+  .tier-table-print {
+    display: block !important;
+    margin-top: 1rem;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+
+  .tier-table-print th,
+  .tier-table-print td {
+    border: 1px solid var(--color-border);
+    padding: 6pt 10pt;
+    text-align: left;
+  }
+
+  .tier-table-print th {
+    background: var(--color-bg-elevated);
+    font-weight: 700;
+    font-size: 8pt;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ----------------------------------------------------------
+     PRESERVE COLORS FOR CHARTS
+  ---------------------------------------------------------- */
+
+  .bar-fill--before {
+    background: #C01324 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .bar-fill--after {
+    background: #027A48 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* ----------------------------------------------------------
+     LINKS — show URL for non-anchor links
+  ---------------------------------------------------------- */
+
+  a[href^="http"]::after,
+  a[href^="mailto"]::after {
+    content: ' (' attr(href) ')';
+    font-size: 8pt;
+    color: var(--color-text-tertiary);
+  }
+
+  a[href^="#"]::after {
+    display: none;
+  }
+
+  /* ----------------------------------------------------------
+     PAGE NUMBERS
+  ---------------------------------------------------------- */
+
+  .section::after {
+    content: '';  /* Override with JS if needed */
+    position: absolute;
+    bottom: 0.25in;
+    right: 0.65in;
+    font-size: 8pt;
+    color: var(--color-text-tertiary);
+  }
+
+  /* ----------------------------------------------------------
+     FOOTER HIDDEN
+  ---------------------------------------------------------- */
+
+  .footer {
+    display: none;
+  }
+}
+
+/* ----------------------------------------------------------
+   PRESENTATION / SLIDE MODE (screen toggle)
+   Add class 'slide-mode' to body
+---------------------------------------------------------- */
+
+body.slide-mode {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100vh;
+}
+
+body.slide-mode .section,
+body.slide-mode .section--first {
+  scroll-snap-align: start;
+  height: 100vh;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding-top: var(--section-y);
+  overflow: hidden;
+}
