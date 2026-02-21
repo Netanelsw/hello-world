@@ -1,0 +1,12 @@
+# Python dependencies — install with: pip install -r requirements.txt
+openpyxl>=3.1.0
+PyMuPDF>=1.23.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+reportlab>=4.0.0
+
+# System dependency (NOT installed by pip):
+#   Tesseract OCR engine + Hebrew language pack
+#   Ubuntu/Debian: sudo apt install tesseract-ocr tesseract-ocr-heb
+#   macOS:         brew install tesseract && brew install tesseract-lang
+#   Windows:       https://github.com/UB-Mannheim/tesseract/wiki
