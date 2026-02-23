@@ -1,0 +1,13 @@
+{
+  "name": "budget-proofer-web",
+  "version": "1.0.0",
+  "description": "Budget Proofer Web App — Swiss K.Y. Association Grant Audit Tool",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
