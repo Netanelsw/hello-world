@@ -5,9 +5,14 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "deploy": "gh-pages -d public"
   },
+  "homepage": "https://netanelsw.github.io/hello-world",
   "dependencies": {
     "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.1.1"
   }
 }
