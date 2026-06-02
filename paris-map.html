@@ -156,7 +156,7 @@ const CATS = {
 const PLACES = [
   // HOTEL
   { name: "Mom'art Paris", category: 'hotel',
-    address: "24 Rue Lamarck, 75018 Paris, France",
+    address: "42 Rue d'Orsel, 75018 Paris, France",
     note: "Your base in Montmartre 🏠" },
 
   // FRENCH RESTAURANTS
@@ -453,18 +453,6 @@ const PLACES = [
     lat: 48.8867, lng: 2.3431,
     address: "Sacré-Cœur, Montmartre, 75018 Paris, France",
     note: "10 min walk from the hotel" },
-  { name: "Eiffel Tower", category: 'poi',
-    lat: 48.8584, lng: 2.2945,
-    address: "Tour Eiffel, 75007 Paris, France" },
-  { name: "Louvre Museum", category: 'poi',
-    lat: 48.8606, lng: 2.3376,
-    address: "Musée du Louvre, 75001 Paris, France" },
-  { name: "Musée d'Orsay", category: 'poi',
-    lat: 48.8600, lng: 2.3266,
-    address: "Musée d'Orsay, 75007 Paris, France" },
-  { name: "Notre-Dame Cathedral", category: 'poi',
-    lat: 48.8530, lng: 2.3499,
-    address: "Cathédrale Notre-Dame de Paris, France" },
 
   // NIGHTLIFE
   { name: "Irish Pub (Grands Boulevards)", category: 'nightlife',
@@ -631,7 +619,7 @@ searchEl.addEventListener('input', refreshList);
 refreshList();
 
 // ── GEOCODING (runs in your browser, caches in localStorage) ──────────────────
-const CACHE_KEY = 'paris-geocache-v2';
+const CACHE_KEY = 'paris-geocache-v3';
 let geoCache = {};
 try { geoCache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) {}
 
