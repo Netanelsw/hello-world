@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Paris Trip Map</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sidebar-w: 280px;
+      --accent: #2563eb;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+    /* ── Layout ── */
+    #app { display: flex; height: 100vh; }
+    #map { flex: 1; z-index: 0; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 1000;
+      box-shadow: 2px 0 12px rgba(0,0,0,.5);
+    }
+
+    #sidebar-header {
+      padding: 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    #sidebar-header h1 { font-size: 16px; font-weight: 700; letter-spacing: .4px; }
+    #sidebar-header p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* search */
+    #search-box {
+      margin: 12px 12px 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      width: calc(100% - 24px);
+      outline: none;
+    }
+    #search-box::placeholder { color: var(--muted); }
+    #search-box:focus { border-color: var(--accent); }
+
+    /* filters */
+    #filters {
+      padding: 10px 12px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .filter-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 4px 9px;
+      border-radius: 20px;
+      border: 1.5px solid transparent;
+      font-size: 11px; font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      user-select: none;
+    }
+    .filter-btn.off { opacity: .35; }
+    .filter-btn:active { transform: scale(.95); }
+
+    /* place list */
+    #place-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    #place-list::-webkit-scrollbar { width: 4px; }
+    #place-list::-webkit-scrollbar-track { background: transparent; }
+    #place-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .place-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 14px;
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .place-item:hover { background: var(--surface); }
+    .place-item.active { background: var(--surface); border-right: 3px solid var(--accent); }
+
+    .place-dot {
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0; margin-top: 1px;
+      border: 2px solid rgba(255,255,255,.15);
+    }
+    .place-info { min-width: 0; }
+    .place-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .place-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    #place-count {
+      padding: 6px 14px;
+      font-size: 11px; color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Mobile: bottom drawer ── */
+    #mobile-toggle {
+      display: none;
+      position: fixed; bottom: 16px; right: 16px;
+      z-index: 2000;
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      border: none; font-size: 22px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      cursor: pointer; align-items: center; justify-content: center;
+    }
+
+    @media (max-width: 640px) {
+      #app { flex-direction: column; }
+      #map { height: 100vh; width: 100%; }
+      #mobile-toggle { display: flex; }
+
+      #sidebar {
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        width: 100%;
+        max-height: 55vh;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        transition: transform .3s ease;
+        z-index: 1500;
+        box-shadow: 0 -4px 24px rgba(0,0,0,.5);
+      }
+      #sidebar.open { transform: translateY(0); }
+      #sidebar-header { border-radius: 16px 16px 0 0; }
+    }
+
+    /* ── Leaflet popup overrides ── */
+    .leaflet-popup-content-wrapper {
+      border-radius: 10px !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25) !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+    .leaflet-popup-content { margin: 0 !important; width: auto !important; min-width: 200px; }
+    .leaflet-popup-tip-container { margin-top: -1px; }
+
+    .popup-inner { padding: 12px 14px; }
+    .popup-cat {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      letter-spacing: .6px; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 4px; margin-bottom: 6px;
+      color: #fff;
+    }
+    .popup-name { font-size: 15px; font-weight: 700; line-height: 1.2; color: #111; }
+    .popup-genre { font-size: 12px; color: #666; margin-top: 2px; }
+    .popup-addr { font-size: 12px; color: #444; margin-top: 5px; }
+    .popup-note { font-size: 12px; color: #555; margin-top: 5px; font-style: italic; }
+    .popup-gmaps {
+      display: block; margin-top: 8px;
+      font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 600;
+    }
+    .popup-gmaps:hover { text-decoration: underline; }
+
+    /* custom markers */
+    .cm { border-radius: 50%; border: 2.5px solid #fff; display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+
+    /* hotel special marker */
+    .hotel-marker {
+      width: 36px !important; height: 36px !important;
+      border-radius: 8px !important;
+      border: 2.5px solid #fff !important;
+      font-size: 17px !important;
+      box-shadow: 0 2px 12px rgba(0,0,0,.45) !important;
+    }
+
+    /* cluster override */
+    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+      background-clip: padding-box;
+    }
+    .marker-cluster div { font-weight: 700; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Sidebar / drawer -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>🗺️ Paris Trip Map</h1>
+      <p>Mom'art Hotel · Montmartre</p>
+    </div>
+
+    <input id="search-box" type="search" placeholder="Search places…" autocomplete="off" />
+
+    <div id="filters"><!-- injected by JS --></div>
+    <div id="place-list"><!-- injected by JS --></div>
+    <div id="place-count"></div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<!-- mobile FAB -->
+<button id="mobile-toggle" aria-label="Toggle list">☰</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script>
+// ──────────────────────────────────────────────
+//  CATEGORY CONFIG
+// ──────────────────────────────────────────────
+const CATS = {
+  hotel:      { label: 'Hotel',        icon: '🏨', color: '#f59e0b', bg: '#fef3c7', text: '#92400e' },
+  french:     { label: 'French',       icon: '🍷', color: '#dc2626', bg: '#fee2e2', text: '#7f1d1d' },
+  italian:    { label: 'Italian',      icon: '🍕', color: '#16a34a', bg: '#dcfce7', text: '#14532d' },
+  asian:      { label: 'Asian',        icon: '🥢', color: '#ea580c', bg: '#ffedd5', text: '#7c2d12' },
+  middleeast: { label: 'Middle East',  icon: '🧆', color: '#d97706', bg: '#fef3c7', text: '#78350f' },
+  seafood:    { label: 'Seafood',      icon: '🦞', color: '#0891b2', bg: '#cffafe', text: '#164e63' },
+  bistro:     { label: 'Bistro/Cafe',  icon: '☕', color: '#7c3aed', bg: '#ede9fe', text: '#4c1d95' },
+  other_rest: { label: 'Restaurant',   icon: '🍽️', color: '#be185d', bg: '#fce7f3', text: '#831843' },
+  bakery:     { label: 'Bakery',       icon: '🥐', color: '#b45309', bg: '#fef3c7', text: '#78350f' },
+  market:     { label: 'Market',       icon: '🛒', color: '#047857', bg: '#d1fae5', text: '#064e3b' },
+  poi:        { label: 'Sights & POI', icon: '🏛️', color: '#1d4ed8', bg: '#dbeafe', text: '#1e3a8a' },
+};
+
+// ──────────────────────────────────────────────
+//  PLACES  ← add your list here
+// ──────────────────────────────────────────────
+const PLACES = [
+  // ── Hotel ──
+  {
+    name: "Mom'art Paris",
+    category: 'hotel',
+    lat: 48.8875,
+    lng: 2.3433,
+    address: "24 Rue Lamarck, 75018 Paris",
+    note: "Your base in Montmartre",
+  },
+
+  // ── Iconic Paris POIs (reference landmarks) ──
+  {
+    name: "Sacré-Cœur Basilica",
+    category: 'poi',
+    lat: 48.8867,
+    lng: 2.3431,
+    address: "Montmartre, 75018 Paris",
+    note: "10 min walk from hotel",
+  },
+  {
+    name: "Eiffel Tower",
+    category: 'poi',
+    lat: 48.8584,
+    lng: 2.2945,
+    address: "Champ de Mars, 75007 Paris",
+  },
+  {
+    name: "Louvre Museum",
+    category: 'poi',
+    lat: 48.8606,
+    lng: 2.3376,
+    address: "Rue de Rivoli, 75001 Paris",
+  },
+  {
+    name: "Musée d'Orsay",
+    category: 'poi',
+    lat: 48.8600,
+    lng: 2.3266,
+    address: "1 Rue de la Légion d'Honneur, 75007 Paris",
+  },
+  {
+    name: "Notre-Dame Cathedral",
+    category: 'poi',
+    lat: 48.8530,
+    lng: 2.3499,
+    address: "6 Parvis Notre-Dame, 75004 Paris",
+  },
+
+  // ── Ready for your list! ──
+  // Copy this template for each place:
+  // {
+  //   name: "Place Name",
+  //   category: 'french',   ← use a key from CATS above
+  //   lat: 48.xxxx,
+  //   lng: 2.xxxx,
+  //   address: "Street address",
+  //   genre: "Genre / cuisine",
+  //   note: "Any extra note",
+  // },
+];
+
+// ──────────────────────────────────────────────
+//  MAP INIT
+// ──────────────────────────────────────────────
+const map = L.map('map', {
+  center: [48.8875, 2.3433],
+  zoom: 14,
+  zoomControl: false,
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// ──────────────────────────────────────────────
+//  MARKER FACTORY
+// ──────────────────────────────────────────────
+function makeIcon(cat, isHotel) {
+  const c = CATS[cat] || CATS.other_rest;
+  const size = isHotel ? 36 : 30;
+  const radius = isHotel ? '8px' : '50%';
+  return L.divIcon({
+    className: '',
+    html: `<div class="cm" style="width:${size}px;height:${size}px;background:${c.color};border-radius:${radius};">${c.icon}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+    popupAnchor: [0, -(size/2 + 4)],
+  });
+}
+
+// ──────────────────────────────────────────────
+//  POPUP FACTORY
+// ──────────────────────────────────────────────
+function makePopup(p) {
+  const c = CATS[p.category] || CATS.other_rest;
+  const gmaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' Paris')}`;
+  return `
+    <div class="popup-inner">
+      <span class="popup-cat" style="background:${c.color}">${c.icon} ${c.label}</span>
+      <div class="popup-name">${p.name}</div>
+      ${p.genre  ? `<div class="popup-genre">🍴 ${p.genre}</div>`   : ''}
+      ${p.address? `<div class="popup-addr">📍 ${p.address}</div>` : ''}
+      ${p.note   ? `<div class="popup-note">${p.note}</div>`       : ''}
+      <a class="popup-gmaps" href="${gmaps}" target="_blank" rel="noopener">Open in Google Maps ↗</a>
+    </div>`;
+}
+
+// ──────────────────────────────────────────────
+//  BUILD MARKERS
+// ──────────────────────────────────────────────
+// Per-category layer groups (for filtering)
+const layers = {};
+Object.keys(CATS).forEach(k => { layers[k] = L.featureGroup(); });
+
+// Cluster group for non-hotel markers
+const cluster = L.markerClusterGroup({
+  showCoverageOnHover: false,
+  maxClusterRadius: 50,
+  iconCreateFunction(g) {
+    const n = g.getChildCount();
+    return L.divIcon({
+      html: `<div style="background:#2563eb;color:#fff;width:34px;height:34px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.3);">${n}</div>`,
+      className: '', iconSize: [34,34],
+    });
+  },
+});
+
+const markers = [];
+
+PLACES.forEach((p, i) => {
+  const isHotel = p.category === 'hotel';
+  const marker = L.marker([p.lat, p.lng], { icon: makeIcon(p.category, isHotel) });
+  marker.bindPopup(makePopup(p), { maxWidth: 260 });
+  marker._placeIndex = i;
+
+  if (isHotel) {
+    marker.addTo(map); // hotel always visible, not clustered
+  } else {
+    cluster.addLayer(marker);
+  }
+
+  if (layers[p.category]) layers[p.category].addLayer(marker);
+  markers.push(marker);
+});
+
+cluster.addTo(map);
+
+// ──────────────────────────────────────────────
+//  SIDEBAR — FILTERS
+// ──────────────────────────────────────────────
+const activeFilters = new Set(Object.keys(CATS));
+
+const filtersEl = document.getElementById('filters');
+Object.entries(CATS).forEach(([key, c]) => {
+  const usedCount = PLACES.filter(p => p.category === key).length;
+  if (!usedCount) return;
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn';
+  btn.dataset.cat = key;
+  btn.style.background = c.bg;
+  btn.style.color = c.text;
+  btn.style.borderColor = c.color;
+  btn.innerHTML = `${c.icon} ${c.label}`;
+  btn.title = `${usedCount} place${usedCount>1?'s':''}`;
+  btn.addEventListener('click', () => toggleFilter(key, btn));
+  filtersEl.appendChild(btn);
+});
+
+function toggleFilter(key, btn) {
+  if (activeFilters.has(key)) {
+    activeFilters.delete(key);
+    btn.classList.add('off');
+  } else {
+    activeFilters.add(key);
+    btn.classList.remove('off');
+  }
+  refreshList();
+  refreshMarkers();
+}
+
+// ──────────────────────────────────────────────
+//  SIDEBAR — PLACE LIST
+// ──────────────────────────────────────────────
+const listEl   = document.getElementById('place-list');
+const countEl  = document.getElementById('place-count');
+const searchEl = document.getElementById('search-box');
+let activeItem = null;
+
+function renderList(places) {
+  listEl.innerHTML = '';
+  places.forEach(({ p, i }) => {
+    const c = CATS[p.category] || CATS.other_rest;
+    const el = document.createElement('div');
+    el.className = 'place-item';
+    el.dataset.idx = i;
+    el.innerHTML = `
+      <div class="place-dot" style="background:${c.color}">${c.icon}</div>
+      <div class="place-info">
+        <div class="place-name">${p.name}</div>
+        <div class="place-meta">${p.genre ? p.genre + ' · ' : ''}${c.label}</div>
+      </div>`;
+    el.addEventListener('click', () => flyTo(i, el));
+    listEl.appendChild(el);
+  });
+  countEl.textContent = `${places.length} place${places.length !== 1 ? 's' : ''}`;
+}
+
+function refreshList() {
+  const q = searchEl.value.toLowerCase();
+  const visible = PLACES
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) =>
+      activeFilters.has(p.category) &&
+      (p.name.toLowerCase().includes(q) ||
+       (p.genre  || '').toLowerCase().includes(q) ||
+       (p.address|| '').toLowerCase().includes(q))
+    );
+  renderList(visible);
+}
+
+function refreshMarkers() {
+  cluster.clearLayers();
+  PLACES.forEach((p, i) => {
+    if (p.category === 'hotel') return;
+    if (activeFilters.has(p.category)) cluster.addLayer(markers[i]);
+  });
+}
+
+function flyTo(idx, el) {
+  const p = PLACES[idx];
+  map.flyTo([p.lat, p.lng], 17, { duration: 0.8 });
+  markers[idx].openPopup();
+  if (activeItem) activeItem.classList.remove('active');
+  el.classList.add('active');
+  activeItem = el;
+  // close mobile drawer
+  sidebar.classList.remove('open');
+}
+
+searchEl.addEventListener('input', refreshList);
+refreshList();
+
+// ──────────────────────────────────────────────
+//  MOBILE TOGGLE
+// ──────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+const fab     = document.getElementById('mobile-toggle');
+
+fab.addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+  fab.textContent = sidebar.classList.contains('open') ? '✕' : '☰';
+});
+
+// close drawer when tapping map on mobile
+map.on('click', () => {
+  sidebar.classList.remove('open');
+  fab.textContent = '☰';
+});
+
+// ──────────────────────────────────────────────
+//  HOME BUTTON — re-center on hotel
+// ──────────────────────────────────────────────
+const HomeControl = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd() {
+    const btn = L.DomUtil.create('button', '');
+    btn.innerHTML = '🏠';
+    btn.title = 'Back to hotel';
+    btn.style.cssText = 'width:34px;height:34px;border-radius:6px;border:none;background:#fff;font-size:16px;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;';
+    btn.addEventListener('click', () => {
+      map.flyTo([48.8875, 2.3433], 15, { duration: 0.8 });
+      markers[0].openPopup();
+    });
+    return btn;
+  }
+});
+new HomeControl().addTo(map);
+
+</script>
+</body>
+</html>
