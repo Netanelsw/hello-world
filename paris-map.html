@@ -18,7 +18,6 @@
     #app { display: flex; height: 100vh; }
     #map { flex: 1; z-index: 0; }
 
-    /* Sidebar */
     #sidebar {
       width: var(--sidebar-w); background: var(--bg); color: var(--text);
       display: flex; flex-direction: column; overflow: hidden;
@@ -27,6 +26,16 @@
     #sidebar-header { padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
     #sidebar-header h1 { font-size: 15px; font-weight: 700; }
     #sidebar-header p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* geocoding progress bar */
+    #geo-bar {
+      padding: 6px 16px; background: #172033; border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    #geo-bar.done { display: none; }
+    #geo-label { font-size: 10px; color: var(--muted); }
+    #geo-track { height: 3px; background: var(--border); border-radius: 2px; }
+    #geo-fill  { height: 3px; background: var(--accent); border-radius: 2px; width: 0%; transition: width .3s; }
 
     #search-box {
       margin: 10px 10px 0; padding: 8px 11px;
@@ -58,6 +67,7 @@
     }
     .place-item:hover { background: var(--surface); }
     .place-item.active { background: var(--surface); border-right-color: var(--accent); }
+    .place-item.pending { opacity: .45; cursor: default; }
     .place-dot {
       width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
       display: flex; align-items: center; justify-content: center;
@@ -68,7 +78,6 @@
 
     #place-count { padding: 5px 13px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
 
-    /* Mobile */
     #mobile-toggle {
       display: none; position: fixed; bottom: 16px; right: 16px; z-index: 2000;
       width: 48px; height: 48px; border-radius: 50%; background: var(--accent); color: #fff;
@@ -81,7 +90,7 @@
       #mobile-toggle { display: flex; }
       #sidebar {
         position: fixed; bottom: 0; left: 0; right: 0; width: 100%;
-        max-height: 58vh; border-radius: 16px 16px 0 0;
+        max-height: 60vh; border-radius: 16px 16px 0 0;
         transform: translateY(100%); transition: transform .3s ease;
         z-index: 1500; box-shadow: 0 -4px 24px rgba(0,0,0,.5);
       }
@@ -89,7 +98,6 @@
       #sidebar-header { border-radius: 16px 16px 0 0; }
     }
 
-    /* Popups */
     .leaflet-popup-content-wrapper { border-radius: 10px !important; box-shadow: 0 4px 20px rgba(0,0,0,.25) !important; padding: 0 !important; overflow: hidden; }
     .leaflet-popup-content { margin: 0 !important; width: auto !important; min-width: 210px; max-width: 260px; }
     .popup-inner { padding: 11px 13px; }
@@ -110,6 +118,10 @@
       <h1>🗺️ Paris Trip Map</h1>
       <p>Mom'art Hotel · Montmartre</p>
     </div>
+    <div id="geo-bar">
+      <div id="geo-label">📍 Pinning places on map… 0 / 0</div>
+      <div id="geo-track"><div id="geo-fill"></div></div>
+    </div>
     <input id="search-box" type="search" placeholder="Search places…" autocomplete="off" />
     <div id="filters"></div>
     <div id="place-list"></div>
@@ -122,6 +134,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
+// ── CATEGORIES ───────────────────────────────────────────────────────────────
 const CATS = {
   hotel:      { label: 'Hotel',             icon: '🏨', color: '#f59e0b', bg: '#fef3c7', text: '#92400e' },
   french:     { label: 'French',            icon: '🍷', color: '#dc2626', bg: '#fee2e2', text: '#7f1d1d' },
@@ -138,215 +151,555 @@ const CATS = {
   poi:        { label: 'Sights & Streets',  icon: '📍', color: '#374151', bg: '#f3f4f6', text: '#111827' },
 };
 
+// ── PLACES ───────────────────────────────────────────────────────────────────
+// lat/lng = hardcoded for well-known landmarks; omitted = geocoded on first open
 const PLACES = [
-  { name: "Mom'art Paris", category: 'hotel', lat: 48.8875, lng: 2.3433, address: "24 Rue Lamarck, 75018 Paris", note: "Your base in Montmartre 🏠" },
+  // HOTEL
+  { name: "Mom'art Paris", category: 'hotel',
+    lat: 48.8875, lng: 2.3433,
+    address: "24 Rue Lamarck, 75018 Paris, France",
+    note: "Your base in Montmartre 🏠" },
 
-  // French
-  { name: "Provençal Bistro (50 types of Pastis)", category: 'french', lat: 48.8562, lng: 2.3630, address: "2 Rue Roger Verlomme, 75003", genre: "French / Provençal", note: "Provençal cooking with 50+ varieties of pastis" },
-  { name: "Stylish Quai Bistro", category: 'french', lat: 48.8509, lng: 2.3547, address: "12 Quai des Célestins, 75004", genre: "French Bistro", note: "French bistro dripping with style on the Seine" },
-  { name: "Brasserie du Marais", category: 'french', lat: 48.8621, lng: 2.3614, address: "38 Rue de Bretagne, 75003", genre: "French Brasserie", note: "Great brasserie in Le Marais" },
-  { name: "Brasserie in the Passage", category: 'french', lat: 48.8527, lng: 2.3432, address: "6 Cour du Commerce Saint-André, 75006", genre: "French Brasserie", note: "Stunning brasserie in a historic covered passage" },
-  { name: "Le Procope — Classic Brasserie", category: 'french', lat: 48.8524, lng: 2.3440, address: "13 Rue de l'Ancienne Comédie, 75006", genre: "Classic French", note: "Most classic French dishes — one of the oldest restaurants in Paris" },
-  { name: "Michelin Bistro (7th arr.)", category: 'french', lat: 48.8590, lng: 2.3041, address: "129 Rue Saint-Dominique, 75007", genre: "French Bistro", note: "Listed in Michelin guide (no star) — quality French bistro" },
-  { name: "Romantic Passage Bistro", category: 'french', lat: 48.8648, lng: 2.3445, address: "1 Rue du Mail, 75002", genre: "French Bistro", note: "French bistro inside a passage — romantic atmosphere" },
-  { name: "Le Bon Georges ⭐ A MUST", category: 'french', lat: 48.8772, lng: 2.3381, address: "45 Rue Saint-Georges, 75009", genre: "French Bistro", note: "A must-visit — Le Bon Georges. Classic neighbourhood bistro at its best" },
-  { name: "My Favorite French Restaurant", category: 'french', lat: 48.8500, lng: 2.3697, address: "1 Rue Antoine Vollon, 75012", genre: "French", note: "One of my absolute favorites ❤️" },
+  // FRENCH RESTAURANTS
+  { name: "Provençal Bistro (50 types of Pastis)", category: 'french',
+    address: "2 Rue Roger Verlomme, 75003 Paris, France",
+    genre: "French / Provençal", note: "Provençal cooking with 50+ varieties of pastis" },
+  { name: "Stylish Quai Bistro", category: 'french',
+    address: "12 Quai des Célestins, 75004 Paris, France",
+    genre: "French Bistro", note: "French bistro dripping with style on the Seine" },
+  { name: "Brasserie du Marais", category: 'french',
+    address: "38 Rue de Bretagne, 75003 Paris, France",
+    genre: "French Brasserie", note: "Great brasserie in Le Marais" },
+  { name: "Brasserie in the Passage", category: 'french',
+    address: "6 Cour du Commerce Saint-André, 75006 Paris, France",
+    genre: "French Brasserie", note: "Stunning brasserie in a historic covered passage" },
+  { name: "Le Procope — Classic Brasserie", category: 'french',
+    address: "13 Rue de l'Ancienne Comédie, 75006 Paris, France",
+    genre: "Classic French", note: "Most classic French dishes — one of the oldest restaurants in Paris" },
+  { name: "Michelin Bistro (7th arr.)", category: 'french',
+    address: "129 Rue Saint-Dominique, 75007 Paris, France",
+    genre: "French Bistro", note: "Listed in Michelin guide (no star) — quality French bistro" },
+  { name: "Romantic Passage Bistro", category: 'french',
+    address: "1 Rue du Mail, 75002 Paris, France",
+    genre: "French Bistro", note: "French bistro inside a passage — romantic atmosphere" },
+  { name: "Le Bon Georges ⭐ A MUST", category: 'french',
+    address: "45 Rue Saint-Georges, 75009 Paris, France",
+    genre: "French Bistro", note: "A must-visit — Le Bon Georges. Classic neighbourhood bistro at its best" },
+  { name: "My Favorite French Restaurant", category: 'french',
+    address: "1 Rue Antoine Vollon, 75012 Paris, France",
+    genre: "French", note: "One of my absolute favorites ❤️" },
 
-  // Asian
-  { name: "Higuma — Best Japanese", category: 'asian', lat: 48.8638, lng: 2.3364, address: "11bis Rue Sainte-Anne, 75001", genre: "Japanese Ramen", note: "Most successful Japanese spot — looks simple but is excellent" },
-  { name: "Super Long Noodles", category: 'asian', lat: 48.8676, lng: 2.3371, address: "16 Rue Saint-Augustin, 75002", genre: "Asian Noodles", note: "Famous for super long noodles" },
-  { name: "Authentic Dim Sum", category: 'asian', lat: 48.8634, lng: 2.3529, address: "68 Rue des Gravilliers, 75003", genre: "Chinese / Dim Sum", note: "Authentic dim sum — local favourite" },
-  { name: "Michelin Ramen", category: 'asian', lat: 48.8533, lng: 2.3397, address: "29 Rue Mazarine, 75006", genre: "Japanese Ramen", note: "Michelin-rated ramen 🍜" },
-  { name: "Great Ramen (Les Halles)", category: 'asian', lat: 48.8640, lng: 2.3458, address: "74-76 Rue Jean-Jacques Rousseau, 75001", genre: "Japanese Ramen", note: "Another excellent ramen spot" },
+  // ASIAN
+  { name: "Higuma — Best Japanese", category: 'asian',
+    address: "11bis Rue Sainte-Anne, 75001 Paris, France",
+    genre: "Japanese Ramen", note: "Most successful Japanese spot — looks simple but is excellent" },
+  { name: "Super Long Noodles", category: 'asian',
+    address: "16 Rue Saint-Augustin, 75002 Paris, France",
+    genre: "Asian Noodles", note: "Famous for super long noodles" },
+  { name: "Authentic Dim Sum", category: 'asian',
+    address: "68 Rue des Gravilliers, 75003 Paris, France",
+    genre: "Chinese / Dim Sum", note: "Authentic dim sum — local favourite" },
+  { name: "Michelin Ramen", category: 'asian',
+    address: "29 Rue Mazarine, 75006 Paris, France",
+    genre: "Japanese Ramen", note: "Michelin-rated ramen 🍜" },
+  { name: "Great Ramen (Les Halles)", category: 'asian',
+    address: "74 Rue Jean-Jacques Rousseau, 75001 Paris, France",
+    genre: "Japanese Ramen", note: "Another excellent ramen spot" },
 
-  // Middle East
-  { name: "Best Couscous in the World!!", category: 'middleeast', lat: 48.8635, lng: 2.3531, address: "69 Rue des Gravilliers, 75003", genre: "Moroccan / Couscous", note: "THE best couscous in the world!! 🔥🔥" },
+  // MIDDLE EAST
+  { name: "Best Couscous in the World!! 🔥", category: 'middleeast',
+    address: "69 Rue des Gravilliers, 75003 Paris, France",
+    genre: "Moroccan / Couscous", note: "THE best couscous in the world!!" },
 
-  // Indian
-  { name: "Passage Brady — Indian 🌶️", category: 'indian', lat: 48.8720, lng: 2.3548, address: "64 Passage Brady, 75010", genre: "Indian", note: "Amazing Indian!! Passage Brady is a whole corridor of Indian restaurants — incredible" },
+  // INDIAN
+  { name: "Passage Brady — Indian 🌶️", category: 'indian',
+    address: "64 Passage Brady, 75010 Paris, France",
+    genre: "Indian", note: "Amazing Indian!! Passage Brady is a whole corridor of Indian restaurants" },
 
-  // Italian
-  { name: "Ober Mamma (Big Mama group)", category: 'italian', lat: 48.8754, lng: 2.3508, address: "44 Rue de Paradis, 75010", genre: "Italian", note: "Italian from the Big Mama group (multiple locations across Paris)" },
-  { name: "Italian Vivienne", category: 'italian', lat: 48.8661, lng: 2.3425, address: "6 Rue Vivienne, 75002", genre: "Italian", note: "Very successful Italian restaurant" },
-  { name: "Italian Market Complex (13th)", category: 'italian', lat: 48.8317, lng: 2.3783, address: "5 Parvis Alan Turing, 75013", genre: "Italian / Market Hall", note: "Indoor Italian market-hall concept near BNF" },
+  // ITALIAN
+  { name: "Ober Mamma (Big Mama group)", category: 'italian',
+    address: "44 Rue de Paradis, 75010 Paris, France",
+    genre: "Italian", note: "Italian from the Big Mama group (multiple locations across Paris)" },
+  { name: "Italian Vivienne", category: 'italian',
+    address: "6 Rue Vivienne, 75002 Paris, France",
+    genre: "Italian", note: "Very successful Italian restaurant" },
+  { name: "Italian Market Complex (13th)", category: 'italian',
+    address: "5 Parvis Alan Turing, 75013 Paris, France",
+    genre: "Italian / Market Hall", note: "Indoor Italian market-hall concept near BNF" },
 
-  // Bars
-  { name: "Hidden Gem Wine Bar ❤️", category: 'bar', lat: 48.8523, lng: 2.3564, address: "26 Rue Beautreillis, 75004", note: "My absolute favorite — tiny hidden corner in Le Marais. Order the orange wine 🍊" },
-  { name: "Wine & Cheese Bar (Dupuis)", category: 'bar', lat: 48.8638, lng: 2.3621, address: "6 Rue Charles-François Dupuis, 75003", note: "Lively wine & cheese bar — sparkling wines, great for nights out" },
-  { name: "Wine Bar — Giant Platters", category: 'bar', lat: 48.8535, lng: 2.3773, address: "25 Rue de Charonne, 75011", note: "Wine bar with HUGE cheese & charcuterie platters 😍 — doubles as a dinner" },
-  { name: "HIGHLY Recommended Wine Bar !!!", category: 'bar', lat: 48.8622, lng: 2.3671, address: "1 bis Passage Saint-Sébastien, 75011", note: "Wine bar with small plates — HIGHLY recommended!!! Must go 🌟" },
-  { name: "Cocktail Bar (Commines)", category: 'bar', lat: 48.8629, lng: 2.3630, address: "1 Rue Commines, 75003", note: "Great cocktail bar" },
-  { name: "Sinner Hotel Bar 😈", category: 'bar', lat: 48.8628, lng: 2.3567, address: "116 Rue du Temple, 75003", note: "Sinner hotel — red velvet lounge, themed parties (Satanic theme nights!), great cocktails. A splurge but worth it" },
-  { name: "Cocktail Bar (René Boulanger)", category: 'bar', lat: 48.8718, lng: 2.3566, address: "38 Rue René Boulanger, 75010", note: "Cocktail bar" },
-  { name: "Wine Bar (Notre-Dame-de-Lorette)", category: 'bar', lat: 48.8783, lng: 2.3388, address: "43 Rue Notre Dame de Lorette, 75009", note: "Wine bar in the cool 9th arrondissement" },
-  { name: "Library Bar — Wine & Cocktails", category: 'bar', lat: 48.8784, lng: 2.3384, address: "4 Impasse Sandrie, 75009", note: "Wine/cocktail bar set inside a library — charming and unique" },
-  { name: "Romantic Wine Bar (Grands Augustins)", category: 'bar', lat: 48.8531, lng: 2.3421, address: "26 Rue des Grands Augustins, 75006", note: "Romantic wine bar atmosphere in Saint-Germain" },
-  { name: "Rooftop → Party from 11pm", category: 'bar', lat: 48.8511, lng: 2.3592, address: "10 Rue Agrippa d'Aubigné, 75004", note: "Rooftop restaurant from 11am, transforms into a rooftop party from 11pm 🌙" },
-  { name: "The Legendary Marais Bar", category: 'bar', lat: 48.8585, lng: 2.3570, address: "78 Rue Vieille du Temple, 75003", note: "THE legendary Marais bar — looks plain, every local ends up here, always turns into a party 🎊" },
+  // BARS & WINE BARS
+  { name: "Hidden Gem Wine Bar ❤️", category: 'bar',
+    address: "26 Rue Beautreillis, 75004 Paris, France",
+    note: "My absolute favorite — tiny hidden corner in Le Marais. Order the orange wine 🍊" },
+  { name: "Wine & Cheese Bar (Dupuis)", category: 'bar',
+    address: "6 Rue Charles-François Dupuis, 75003 Paris, France",
+    note: "Lively wine & cheese bar — sparkling wines, great for nights out" },
+  { name: "Wine Bar — Giant Platters", category: 'bar',
+    address: "25 Rue de Charonne, 75011 Paris, France",
+    note: "Wine bar with HUGE cheese & charcuterie platters 😍 — doubles as a dinner" },
+  { name: "HIGHLY Recommended Wine Bar !!!", category: 'bar',
+    address: "1 bis Passage Saint-Sébastien, 75011 Paris, France",
+    note: "Wine bar with small plates — HIGHLY recommended!!! Must go 🌟" },
+  { name: "Cocktail Bar (Commines)", category: 'bar',
+    address: "1 Rue Commines, 75003 Paris, France",
+    note: "Great cocktail bar" },
+  { name: "Sinner Hotel Bar 😈", category: 'bar',
+    address: "116 Rue du Temple, 75003 Paris, France",
+    note: "Sinner hotel — red velvet lounge, themed parties, great cocktails" },
+  { name: "Cocktail Bar (René Boulanger)", category: 'bar',
+    address: "38 Rue René Boulanger, 75010 Paris, France",
+    note: "Cocktail bar" },
+  { name: "Wine Bar (Notre-Dame-de-Lorette)", category: 'bar',
+    address: "43 Rue Notre Dame de Lorette, 75009 Paris, France",
+    note: "Wine bar in the cool 9th arrondissement" },
+  { name: "Library Bar — Wine & Cocktails", category: 'bar',
+    address: "4 Impasse Sandrie, 75009 Paris, France",
+    note: "Wine/cocktail bar set inside a library — charming and unique" },
+  { name: "Romantic Wine Bar (Grands Augustins)", category: 'bar',
+    address: "26 Rue des Grands Augustins, 75006 Paris, France",
+    note: "Romantic wine bar atmosphere in Saint-Germain" },
+  { name: "Rooftop → Party from 11pm", category: 'bar',
+    address: "10 Rue Agrippa d'Aubigné, 75004 Paris, France",
+    note: "Rooftop restaurant from 11am — transforms into a party from 11pm 🌙" },
+  { name: "The Legendary Marais Bar", category: 'bar',
+    address: "78 Rue Vieille du Temple, 75003 Paris, France",
+    note: "THE legendary Marais bar — looks plain, every local ends up here, always turns into a party 🎊" },
 
-  // Jazz
-  { name: "Jazz (Rue de Rivoli)", category: 'jazz', lat: 48.8555, lng: 2.3502, address: "38 Rue de Rivoli, 75004", note: "Jazz — open jams, live stage, alcohol + music + fun" },
-  { name: "Jazz (Rue Bonaparte)", category: 'jazz', lat: 48.8534, lng: 2.3348, address: "18 Rue Bonaparte, 75006", note: "Jazz venue in Saint-Germain" },
-  { name: "Jazz Club (Rue de la Huchette)", category: 'jazz', lat: 48.8521, lng: 2.3470, address: "5 Rue de la Huchette, 75005", note: "Classic Paris jazz cave — iconic spot near Notre-Dame" },
-  { name: "Jazz (Montmartre — Lapin Agile)", category: 'jazz', lat: 48.8869, lng: 2.3385, address: "22 Rue des Saules, 75018", note: "Jazz in Montmartre — iconic Butte Montmartre setting" },
+  // JAZZ
+  { name: "Jazz (Rue de Rivoli)", category: 'jazz',
+    address: "38 Rue de Rivoli, 75004 Paris, France",
+    note: "Jazz — open jams, live stage, alcohol + music + fun" },
+  { name: "Jazz (Rue Bonaparte)", category: 'jazz',
+    address: "18 Rue Bonaparte, 75006 Paris, France",
+    note: "Jazz venue in Saint-Germain" },
+  { name: "Jazz Club (Rue de la Huchette)", category: 'jazz',
+    address: "5 Rue de la Huchette, 75005 Paris, France",
+    note: "Classic Paris jazz cave — iconic spot near Notre-Dame" },
+  { name: "Jazz (Montmartre — Lapin Agile)", category: 'jazz',
+    address: "22 Rue des Saules, 75018 Paris, France",
+    note: "Jazz in Montmartre — iconic Butte Montmartre setting" },
 
-  // Cafés
-  { name: "Favorite Café — Bagels & French Toast 😍", category: 'bistro', lat: 48.8516, lng: 2.3745, address: "107 Av. Ledru Rollin, 75011", note: "My absolute favorite café — bagels and French toast are WOW 😍" },
-  { name: "Second Favorite Café", category: 'bistro', lat: 48.8640, lng: 2.3544, address: "36 Rue de Turbigo, 75003", note: "My second most loved café in Paris" },
-  { name: "Café with Great Food (Turenne)", category: 'bistro', lat: 48.8607, lng: 2.3696, address: "124 Rue de Turenne, 75003", note: "Great café that also does excellent food" },
-  { name: "Noir Café (Blancs Manteaux)", category: 'bistro', lat: 48.8563, lng: 2.3521, address: "9 Rue des Blancs Manteaux, 75004", note: "Noir — excellent café chain (multiple locations across Paris)" },
-  { name: "Noir Café (Rue du Bac)", category: 'bistro', lat: 48.8565, lng: 2.3272, address: "83 Rue du Bac, 75007", note: "Noir café chain — 7th arr location" },
-  { name: "Noir Café (Beaumarchais)", category: 'bistro', lat: 48.8566, lng: 2.3702, address: "111 Bd Beaumarchais, 75003", note: "Noir café chain — Marais location" },
-  { name: "Brunch Café (Faubourg Montmartre)", category: 'bistro', lat: 48.8740, lng: 2.3455, address: "58 Rue du Faubourg Montmartre, 75009", note: "Wonderful café & brunch chain — some branches do amazing weekend brunches" },
-  { name: "Brunch Café (Rue Chapon)", category: 'bistro', lat: 48.8632, lng: 2.3528, address: "10 Rue Chapon, 75003", note: "Brunch café chain — Marais location" },
-  { name: "Brunch Café (Saints-Pères)", category: 'bistro', lat: 48.8548, lng: 2.3296, address: "38 Rue des Saints-Pères, 75007", note: "Brunch café chain — 7th arr location" },
-  { name: "Brunch Café (Rue de Seine)", category: 'bistro', lat: 48.8540, lng: 2.3368, address: "76 Rue de Seine, 75006", note: "Brunch café chain — Saint-Germain location" },
-  { name: "Brunch Café (Palais Royal)", category: 'bistro', lat: 48.8632, lng: 2.3369, address: "2 Pl. André Malraux, 75001", note: "Brunch café chain — right by Palais Royal" },
-  { name: "Bourse de Commerce Café", category: 'bistro', lat: 48.8630, lng: 2.3451, address: "2 Rue de Viarmes, 75001", note: "Café under the dome of Bourse de Commerce (modern art museum) — Michelin pastries, cool atmosphere" },
-  { name: "Île Saint-Louis Café", category: 'bistro', lat: 48.8509, lng: 2.3527, address: "42 Quai d'Orléans, 75004", note: "Charming café on Île Saint-Louis — stroll the whole island for guaranteed atmosphere" },
+  // CAFÉS
+  { name: "Favorite Café — Bagels & French Toast 😍", category: 'bistro',
+    address: "107 Avenue Ledru Rollin, 75011 Paris, France",
+    note: "My absolute favorite café — bagels and French toast are WOW 😍" },
+  { name: "Second Favorite Café", category: 'bistro',
+    address: "36 Rue de Turbigo, 75003 Paris, France",
+    note: "My second most loved café in Paris" },
+  { name: "Café with Great Food (Turenne)", category: 'bistro',
+    address: "124 Rue de Turenne, 75003 Paris, France",
+    note: "Great café that also does excellent food" },
+  { name: "Noir Café (Blancs Manteaux)", category: 'bistro',
+    address: "9 Rue des Blancs Manteaux, 75004 Paris, France",
+    note: "Noir — excellent café chain (multiple locations)" },
+  { name: "Noir Café (Rue du Bac)", category: 'bistro',
+    address: "83 Rue du Bac, 75007 Paris, France",
+    note: "Noir café chain — 7th arr location" },
+  { name: "Noir Café (Beaumarchais)", category: 'bistro',
+    address: "111 Boulevard Beaumarchais, 75003 Paris, France",
+    note: "Noir café chain — Marais location" },
+  { name: "Brunch Café (Faubourg Montmartre)", category: 'bistro',
+    address: "58 Rue du Faubourg Montmartre, 75009 Paris, France",
+    note: "Wonderful café & brunch chain — some branches do amazing weekend brunches" },
+  { name: "Brunch Café (Rue Chapon)", category: 'bistro',
+    address: "10 Rue Chapon, 75003 Paris, France",
+    note: "Brunch café chain — Marais location" },
+  { name: "Brunch Café (Saints-Pères)", category: 'bistro',
+    address: "38 Rue des Saints-Pères, 75007 Paris, France",
+    note: "Brunch café chain — 7th arr location" },
+  { name: "Brunch Café (Rue de Seine)", category: 'bistro',
+    address: "76 Rue de Seine, 75006 Paris, France",
+    note: "Brunch café chain — Saint-Germain location" },
+  { name: "Brunch Café (Palais Royal)", category: 'bistro',
+    address: "2 Place André Malraux, 75001 Paris, France",
+    note: "Brunch café chain — right by Palais Royal" },
+  { name: "Bourse de Commerce Café", category: 'bistro',
+    address: "2 Rue de Viarmes, 75001 Paris, France",
+    note: "Café under the dome of Bourse de Commerce (modern art museum)" },
+  { name: "Île Saint-Louis Café", category: 'bistro',
+    address: "42 Quai d'Orléans, 75004 Paris, France",
+    note: "Charming café on Île Saint-Louis — stroll the whole island" },
 
-  // Bakeries
-  { name: "Instagram Patisserie — 1hr Queue 🔥", category: 'bakery', lat: 48.8686, lng: 2.3325, address: "35 Av. de l'Opéra, 75002", note: "The famous one with cool Instagram reels — expect a 1-hour queue. Worth it." },
-  { name: "Instagram Patisserie — Shorter Queue", category: 'bakery', lat: 48.8660, lng: 2.3300, address: "6 Rue de Castiglione, 75001", note: "Second branch of the same chef — much shorter queue but different products" },
-  { name: "Ritz Hotel Patisserie", category: 'bakery', lat: 48.8671, lng: 2.3267, address: "38 Rue Cambon, 75001", note: "The patisserie of the legendary Ritz Hotel — indulgent" },
-  { name: "Successful Boulangerie (Rivoli)", category: 'bakery', lat: 48.8566, lng: 2.3504, address: "48 Rue de Rivoli, 75004", note: "Great boulangerie chain — multiple locations" },
-  { name: "Decadent Boulangerie (St Denis)", category: 'bakery', lat: 48.8678, lng: 2.3501, address: "181 Rue Saint-Denis, 75002", note: "Sinfully good boulangerie chain 🤤 — multiple locations" },
-  { name: "Best Profiteroles & Éclairs", category: 'bakery', lat: 48.8797, lng: 2.3415, address: "44 Rue des Martyrs, 75009", note: "THE best profiteroles and éclairs in Paris — full stop" },
-  { name: "Michelin Chef Chocolaterie", category: 'bakery', lat: 48.8551, lng: 2.3718, address: "40 Rue de la Roquette, 75011", note: "Chocolaterie by a Michelin-starred chef — multiple locations" },
-  { name: "Chocolaterie (Av. de l'Opéra)", category: 'bakery', lat: 48.8684, lng: 2.3330, address: "33 Av. de l'Opéra, 75002", note: "Another excellent chocolaterie near the Opéra" },
-  { name: "Oldest Patisserie in Paris", category: 'bakery', lat: 48.8629, lng: 2.3476, address: "51 Rue Montorgueil, 75002", note: "The oldest patisserie in Paris — on the legendary Rue Montorgueil" },
-  { name: "Reinventor of Modern Patisserie", category: 'bakery', lat: 48.8555, lng: 2.3169, address: "37 Rue de Varenne, 75007", note: "The man who reinvented modern French patisserie — a pilgrimage for pastry lovers" },
-  { name: "Local Boulangerie — Unique Flavors", category: 'bakery', lat: 48.8643, lng: 2.3739, address: "20 Rue Jean-Pierre Timbaud, 75011", note: "Local bakery with adventurous and unique flavor combinations" },
-  { name: "Queen of Desserts 👑", category: 'bakery', lat: 48.8558, lng: 2.3262, address: "89 Rue du Bac, 75007", note: "The undisputed queen of Paris desserts — don't miss" },
-  { name: "Japanese Bakery (Sainte-Anne)", category: 'bakery', lat: 48.8641, lng: 2.3367, address: "16 Rue Sainte-Anne, 75001", note: "Japanese bakery — delicate and precise, near the Japanese district" },
-  { name: "Cheval Blanc — Seine View Café", category: 'bakery', lat: 48.8602, lng: 2.3420, address: "8 Quai du Louvre, 75001", note: "Fancy brasserie at the luxury Cheval Blanc hotel — stunning Seine view. Pastries by Maxime Frédéric (Paris's most beloved pastry chef). Pricey but worth it 🌟" },
-  { name: "Louis Vuitton Café (Pont Neuf)", category: 'bakery', lat: 48.8597, lng: 2.3429, address: "2 Rue du Pont Neuf, 75001", note: "Same chef (Maxime Frédéric) runs the desserts at the Louis Vuitton café — across the street from Cheval Blanc. Worth a pop-in." },
-  { name: "Marais Tart Café", category: 'bakery', lat: 48.8566, lng: 2.3543, address: "3 Rue des Rosiers, 75004", note: "Marais café with a spectacular & unique tart selection" },
-  { name: "Sweet Stop (Quai de Montebello)", category: 'bakery', lat: 48.8521, lng: 2.3497, address: "11 Quai de Montebello, 75005", note: "Sweet stop near Notre-Dame — perfect for a dessert with a view" },
+  // BAKERIES & PATISSERIES
+  { name: "Instagram Patisserie — 1hr Queue 🔥", category: 'bakery',
+    address: "35 Avenue de l'Opéra, 75002 Paris, France",
+    note: "The famous one with cool Instagram reels — expect a 1-hour queue. Worth it." },
+  { name: "Instagram Patisserie — Shorter Queue", category: 'bakery',
+    address: "6 Rue de Castiglione, 75001 Paris, France",
+    note: "Second branch of same chef — much shorter queue but different products" },
+  { name: "Ritz Hotel Patisserie", category: 'bakery',
+    address: "38 Rue Cambon, 75001 Paris, France",
+    note: "The patisserie of the legendary Ritz Hotel — indulgent" },
+  { name: "Successful Boulangerie (Rivoli)", category: 'bakery',
+    address: "48 Rue de Rivoli, 75004 Paris, France",
+    note: "Great boulangerie chain — multiple locations" },
+  { name: "Decadent Boulangerie (St Denis)", category: 'bakery',
+    address: "181 Rue Saint-Denis, 75002 Paris, France",
+    note: "Sinfully good boulangerie chain 🤤 — multiple locations" },
+  { name: "Best Profiteroles & Éclairs", category: 'bakery',
+    address: "44 Rue des Martyrs, 75009 Paris, France",
+    note: "THE best profiteroles and éclairs in Paris — full stop" },
+  { name: "Michelin Chef Chocolaterie", category: 'bakery',
+    address: "40 Rue de la Roquette, 75011 Paris, France",
+    note: "Chocolaterie by a Michelin-starred chef — multiple locations" },
+  { name: "Chocolaterie (Av. de l'Opéra)", category: 'bakery',
+    address: "33 Avenue de l'Opéra, 75002 Paris, France",
+    note: "Another excellent chocolaterie near the Opéra" },
+  { name: "Oldest Patisserie in Paris", category: 'bakery',
+    address: "51 Rue Montorgueil, 75002 Paris, France",
+    note: "The oldest patisserie in Paris — on the legendary Rue Montorgueil" },
+  { name: "Reinventor of Modern Patisserie", category: 'bakery',
+    address: "37 Rue de Varenne, 75007 Paris, France",
+    note: "The man who reinvented modern French patisserie — a pilgrimage for pastry lovers" },
+  { name: "Local Boulangerie — Unique Flavors", category: 'bakery',
+    address: "20 Rue Jean-Pierre Timbaud, 75011 Paris, France",
+    note: "Local bakery with adventurous and unique flavor combinations" },
+  { name: "Queen of Desserts 👑", category: 'bakery',
+    address: "89 Rue du Bac, 75007 Paris, France",
+    note: "The undisputed queen of Paris desserts — don't miss" },
+  { name: "Japanese Bakery (Sainte-Anne)", category: 'bakery',
+    address: "16 Rue Sainte-Anne, 75001 Paris, France",
+    note: "Japanese bakery — delicate and precise, near the Japanese district" },
+  { name: "Cheval Blanc — Seine View Café", category: 'bakery',
+    address: "8 Quai du Louvre, 75001 Paris, France",
+    note: "Fancy brasserie at Cheval Blanc hotel — stunning Seine view. Pastries by Maxime Frédéric. Pricey but worth it 🌟" },
+  { name: "Louis Vuitton Café (Pont Neuf)", category: 'bakery',
+    address: "2 Rue du Pont Neuf, 75001 Paris, France",
+    note: "Same chef (Maxime Frédéric) runs desserts at the LV café — worth a pop-in" },
+  { name: "Marais Tart Café", category: 'bakery',
+    address: "3 Rue des Rosiers, 75004 Paris, France",
+    note: "Marais café with a spectacular & unique tart selection" },
+  { name: "Sweet Stop (Quai de Montebello)", category: 'bakery',
+    address: "11 Quai de Montebello, 75005 Paris, France",
+    note: "Sweet stop near Notre-Dame — perfect for a dessert with a view" },
 
-  // Markets
-  { name: "Marché d'Aligre", category: 'market', lat: 48.8484, lng: 2.3790, address: "Place d'Aligre, 75012", note: "Open every day except Monday — 12th arr. Lively and authentic" },
-  { name: "Marché des Enfants Rouges", category: 'market', lat: 48.8622, lng: 2.3618, address: "39 Rue de Bretagne, 75003", note: "Oldest covered market in Paris — Le Marais. Open daily except Friday" },
-  { name: "Marché aux Puces (Flea Market)", category: 'market', lat: 48.9043, lng: 2.3335, address: "110 Rue des Rosiers, 93400 Saint-Ouen", note: "The famous Paris flea market — open Fri–Mon (verify hours). Huge!" },
-  { name: "Marché de la Bastille", category: 'market', lat: 48.8582, lng: 2.3712, address: "Boulevard Richard Lenoir, 75011", note: "Open Thursdays and Sundays — one of the best produce markets in Paris" },
-  { name: "Marché Maubert", category: 'market', lat: 48.8514, lng: 2.3484, address: "58 Bd Saint-Germain, 75005", note: "Open Tuesday, Thursday & Saturday" },
+  // MARKETS
+  { name: "Marché d'Aligre", category: 'market',
+    address: "Place d'Aligre, 75012 Paris, France",
+    note: "Open every day except Monday — 12th arr. Lively and authentic" },
+  { name: "Marché des Enfants Rouges", category: 'market',
+    address: "39 Rue de Bretagne, 75003 Paris, France",
+    note: "Oldest covered market in Paris — Le Marais. Open daily except Friday" },
+  { name: "Marché aux Puces (Flea Market)", category: 'market',
+    address: "110 Rue des Rosiers, Saint-Ouen, France",
+    note: "The famous Paris flea market — open Fri–Mon (verify hours)" },
+  { name: "Marché de la Bastille", category: 'market',
+    address: "Boulevard Richard Lenoir, 75011 Paris, France",
+    note: "Open Thursdays and Sundays — one of the best produce markets in Paris" },
+  { name: "Marché Maubert", category: 'market',
+    address: "Place Maubert, 75005 Paris, France",
+    note: "Open Tuesday, Thursday & Saturday" },
 
-  // Parks
-  { name: "Jardin du Luxembourg", category: 'poi', lat: 48.8487, lng: 2.3373, address: "Rue de Médicis, 75006", note: "The iconic Parisian garden — classic" },
-  { name: "Jardin des Tuileries", category: 'poi', lat: 48.8638, lng: 2.3265, address: "Allée Centrale, 75001", note: "Grand garden between the Louvre and Place de la Concorde" },
-  { name: "Parc Monceau", category: 'poi', lat: 48.8792, lng: 2.3104, address: "35 Bd de Courcelles, 75008", note: "Beautiful and peaceful park in the 8th arr." },
-  { name: "Place des Vosges", category: 'poi', lat: 48.8552, lng: 2.3626, address: "Place des Vosges, 75004", note: "The most famous square in Paris — stunning arcaded architecture" },
-  { name: "Jardin des Plantes (5th)", category: 'poi', lat: 48.8447, lng: 2.3581, address: "Place Valhubert, 75005", note: "Beautiful garden in the 5th arr." },
-  { name: "Parc des Buttes-Chaumont", category: 'poi', lat: 48.8797, lng: 2.3813, address: "Route Circulaire du Lac, 75019", note: "Vast, hilly and unique park in the 19th arr. — a local favourite" },
+  // PARKS & GARDENS — hardcoded, well-known
+  { name: "Jardin du Luxembourg", category: 'poi',
+    lat: 48.8462, lng: 2.3372,
+    address: "Jardin du Luxembourg, 75006 Paris, France",
+    note: "The iconic Parisian garden — classic" },
+  { name: "Jardin des Tuileries", category: 'poi',
+    lat: 48.8634, lng: 2.3274,
+    address: "Jardin des Tuileries, 75001 Paris, France",
+    note: "Grand garden between the Louvre and Place de la Concorde" },
+  { name: "Parc Monceau", category: 'poi',
+    lat: 48.8796, lng: 2.3090,
+    address: "Parc Monceau, 75008 Paris, France",
+    note: "Beautiful and peaceful park in the 8th arr." },
+  { name: "Place des Vosges", category: 'poi',
+    lat: 48.8554, lng: 2.3625,
+    address: "Place des Vosges, 75004 Paris, France",
+    note: "The most famous square in Paris — stunning arcaded architecture" },
+  { name: "Jardin des Plantes", category: 'poi',
+    lat: 48.8441, lng: 2.3592,
+    address: "Jardin des Plantes, 75005 Paris, France",
+    note: "Beautiful garden in the 5th arr." },
+  { name: "Parc des Buttes-Chaumont", category: 'poi',
+    lat: 48.8797, lng: 2.3822,
+    address: "Parc des Buttes-Chaumont, 75019 Paris, France",
+    note: "Vast, hilly and unique park in the 19th arr. — a local favourite" },
 
-  // Streets & passages
-  { name: "Rue Montorgueil 🛍️", category: 'poi', lat: 48.8630, lng: 2.3473, note: "Lively pedestrian street — restaurants, wine bars & patisseries all the way down" },
-  { name: "Rue des Martyrs", category: 'poi', lat: 48.8798, lng: 2.3401, note: "Lively street below Montmartre — cafés, boulangeries, great neighbourhood vibe" },
-  { name: "Rue de Bretagne", category: 'poi', lat: 48.8623, lng: 2.3610, note: "Full of delis, chocolate shops, cafés — great for a foodie stroll" },
-  { name: "Rue de Rivoli (Shopping)", category: 'poi', lat: 48.8604, lng: 2.3401, note: "Paris's main shopping street" },
-  { name: "Rue Princesse (Bar Street)", category: 'poi', lat: 48.8524, lng: 2.3355, address: "Rue Princesse, 75006", note: "Great bar street in the 6th arr. — lively at night" },
-  { name: "Passage des Panoramas", category: 'poi', lat: 48.8698, lng: 2.3462, address: "Passage des Panoramas, 75002", note: "Famous covered passage — restaurants, stamp dealers, lovely atmosphere" },
-  { name: "Galerie Vivienne", category: 'poi', lat: 48.8666, lng: 2.3388, address: "4 Rue des Petits Champs, 75002", note: "Elegant covered gallery near Palais Royal" },
-  { name: "Hidden Passage (6th)", category: 'poi', lat: 48.8528, lng: 2.3392, note: "Secret covered passage near Odéon — few tourists know it" },
-  { name: "Rue de Buci", category: 'poi', lat: 48.8529, lng: 2.3379, address: "Rue de Buci, 75006", note: "Full of patisseries and restaurants — quintessential Parisian street life" },
-  { name: "Rue de Charonne", category: 'poi', lat: 48.8542, lng: 2.3771, address: "Rue de Charonne, 75011", note: "Local vibe — wine bars, patisseries, restaurants. Very lively in the evenings" },
-  { name: "Île Saint-Louis", category: 'poi', lat: 48.8508, lng: 2.3541, note: "Stroll all the streets of this island — guaranteed atmosphere" },
-  { name: "Rue Crémieux 🌈", category: 'poi', lat: 48.8469, lng: 2.3678, address: "Rue Crémieux, 75012", note: "Colorful and photogenic street" },
+  // STREETS & PASSAGES
+  { name: "Rue Montorgueil 🛍️", category: 'poi',
+    address: "Rue Montorgueil, 75002 Paris, France",
+    note: "Lively pedestrian street — restaurants, wine bars & patisseries all the way down" },
+  { name: "Rue des Martyrs", category: 'poi',
+    address: "Rue des Martyrs, 75009 Paris, France",
+    note: "Lively street below Montmartre — cafés, boulangeries, great vibe" },
+  { name: "Rue de Bretagne", category: 'poi',
+    address: "Rue de Bretagne, 75003 Paris, France",
+    note: "Full of delis, chocolate shops, cafés — great for a foodie stroll" },
+  { name: "Passage des Panoramas", category: 'poi',
+    address: "Passage des Panoramas, 75002 Paris, France",
+    note: "Famous covered passage — restaurants, stamp dealers, lovely atmosphere" },
+  { name: "Galerie Vivienne", category: 'poi',
+    address: "Galerie Vivienne, 75002 Paris, France",
+    note: "Elegant covered gallery near Palais Royal" },
+  { name: "Rue de Buci", category: 'poi',
+    address: "Rue de Buci, 75006 Paris, France",
+    note: "Full of patisseries and restaurants — quintessential Parisian street life" },
+  { name: "Rue de Charonne", category: 'poi',
+    address: "Rue de Charonne, 75011 Paris, France",
+    note: "Local vibe — wine bars, patisseries, restaurants. Very lively in the evenings" },
+  { name: "Île Saint-Louis", category: 'poi',
+    lat: 48.8512, lng: 2.3534,
+    address: "Île Saint-Louis, 75004 Paris, France",
+    note: "Stroll all the streets of this island on the Seine — guaranteed atmosphere" },
+  { name: "Rue Crémieux 🌈", category: 'poi',
+    address: "Rue Crémieux, 75012 Paris, France",
+    note: "Colorful and photogenic street — great for photos" },
+  { name: "Rue Princesse (Bar Street)", category: 'poi',
+    address: "Rue Princesse, 75006 Paris, France",
+    note: "Great bar street in the 6th arr. — lively at night" },
 
-  // Landmarks
-  { name: "Sacré-Cœur Basilica", category: 'poi', lat: 48.8867, lng: 2.3431, address: "Montmartre, 75018", note: "10 min walk from the hotel" },
-  { name: "Eiffel Tower", category: 'poi', lat: 48.8584, lng: 2.2945, address: "Champ de Mars, 75007" },
-  { name: "Louvre Museum", category: 'poi', lat: 48.8606, lng: 2.3376, address: "Rue de Rivoli, 75001" },
-  { name: "Musée d'Orsay", category: 'poi', lat: 48.8600, lng: 2.3266, address: "1 Rue de la Légion d'Honneur, 75007" },
-  { name: "Notre-Dame Cathedral", category: 'poi', lat: 48.8530, lng: 2.3499, address: "Parvis Notre-Dame, 75004" },
+  // ICONIC LANDMARKS — hardcoded
+  { name: "Sacré-Cœur Basilica", category: 'poi',
+    lat: 48.8867, lng: 2.3431,
+    address: "Sacré-Cœur, Montmartre, 75018 Paris, France",
+    note: "10 min walk from the hotel" },
+  { name: "Eiffel Tower", category: 'poi',
+    lat: 48.8584, lng: 2.2945,
+    address: "Tour Eiffel, 75007 Paris, France" },
+  { name: "Louvre Museum", category: 'poi',
+    lat: 48.8606, lng: 2.3376,
+    address: "Musée du Louvre, 75001 Paris, France" },
+  { name: "Musée d'Orsay", category: 'poi',
+    lat: 48.8600, lng: 2.3266,
+    address: "Musée d'Orsay, 75007 Paris, France" },
+  { name: "Notre-Dame Cathedral", category: 'poi',
+    lat: 48.8530, lng: 2.3499,
+    address: "Cathédrale Notre-Dame de Paris, France" },
 
-  // Nightlife
-  { name: "Irish Pub (Grands Boulevards)", category: 'nightlife', lat: 48.8717, lng: 2.3445, address: "1 Bd Montmartre, 75002", note: "Irish pub chain — gets very lively at night. Favorite location listed; worth checking other branches" },
-  { name: "Australian Rooftop Bar (Austerlitz)", category: 'nightlife', lat: 48.8425, lng: 2.3650, address: "34 Quai d'Austerlitz, 75013", note: "Australian bar chain — rooftop location. Multiple locations in Paris" },
-  { name: "Party Boat on the Seine 🛥️", category: 'nightlife', lat: 48.8619, lng: 2.3120, address: "Port des Invalides, Quai d'Orsay, 75007", note: "Hot boat party on the Seine — unique Paris experience" },
-  { name: "Rue de Lappe — Party Street", category: 'nightlife', lat: 48.8532, lng: 2.3718, address: "Rue de Lappe, 75011", note: "Street packed with party bars — nightlife central in the 11th" },
-  { name: "Club Clichy (Daily Lineup)", category: 'nightlife', lat: 48.8841, lng: 2.3360, address: "90 Bd de Clichy, 75018", note: "Club with changing themes daily — 80s, rap, rock, 2000s. Near Pigalle" },
-  { name: "Legendary Gay Club", category: 'nightlife', lat: 48.8570, lng: 2.3523, address: "23 Rue du Temple, 75004", note: "The most famous gay club in Paris — Le Marais" },
-  { name: "Huge Club (Grands Boulevards)", category: 'nightlife', lat: 48.8713, lng: 2.3485, address: "5 Bd Poissonnière, 75002", note: "Massive club on the Grands Boulevards" },
-  { name: "Favorite Dance Bar ❤️", category: 'nightlife', lat: 48.8607, lng: 2.3440, address: "16 Rue du Roule, 75001", note: "My absolute favorite dance bar ❤️ — near Châtelet" },
-  { name: "Perruche Rooftop (Printemps)", category: 'nightlife', lat: 48.8757, lng: 2.3229, address: "Printemps, 2 Rue du Havre, 75009", note: "Perruche rooftop bar chain — Printemps location. Stunning views" },
-  { name: "Rooftop — Montmartre", category: 'nightlife', lat: 48.8870, lng: 2.3323, address: "12-14 Rue Joseph de Maistre, 75018", note: "Rooftop bar in Montmartre" },
-  { name: "Rooftop — Le Marais", category: 'nightlife', lat: 48.8628, lng: 2.3534, address: "243 Rue Saint-Martin, 75003", note: "Rooftop bar in Le Marais" },
-  { name: "Rooftop — Peninsula Hotel", category: 'nightlife', lat: 48.8726, lng: 2.2970, address: "19 Av. Kléber, 75116", note: "Fancy rooftop at the Peninsula hotel — near Arc de Triomphe" },
-  { name: "Rue Mouffetard — Crêperies until 5am", category: 'nightlife', lat: 48.8450, lng: 2.3500, address: "Rue Mouffetard, 75005", note: "Famous student street near the Sorbonne — crêperies open until 5am 🥞" },
+  // NIGHTLIFE
+  { name: "Irish Pub (Grands Boulevards)", category: 'nightlife',
+    address: "1 Boulevard Montmartre, 75002 Paris, France",
+    note: "Irish pub chain — gets very lively at night. Favorite location; worth checking other branches" },
+  { name: "Australian Rooftop Bar (Austerlitz)", category: 'nightlife',
+    address: "34 Quai d'Austerlitz, 75013 Paris, France",
+    note: "Australian bar chain — rooftop location. Multiple locations in Paris" },
+  { name: "Party Boat on the Seine 🛥️", category: 'nightlife',
+    address: "Port des Invalides, 75007 Paris, France",
+    note: "Hot boat party on the Seine — unique Paris experience" },
+  { name: "Rue de Lappe — Party Street", category: 'nightlife',
+    address: "Rue de Lappe, 75011 Paris, France",
+    note: "Street packed with party bars — nightlife central in the 11th" },
+  { name: "Club Clichy (Daily Lineup)", category: 'nightlife',
+    address: "90 Boulevard de Clichy, 75018 Paris, France",
+    note: "Club with changing themes daily — 80s, rap, rock, 2000s. Near Pigalle" },
+  { name: "Legendary Gay Club", category: 'nightlife',
+    address: "23 Rue du Temple, 75004 Paris, France",
+    note: "The most famous gay club in Paris — Le Marais" },
+  { name: "Huge Club (Grands Boulevards)", category: 'nightlife',
+    address: "5 Boulevard Poissonnière, 75002 Paris, France",
+    note: "Massive club on the Grands Boulevards" },
+  { name: "Favorite Dance Bar ❤️", category: 'nightlife',
+    address: "16 Rue du Roule, 75001 Paris, France",
+    note: "My absolute favorite dance bar ❤️ — near Châtelet" },
+  { name: "Perruche Rooftop (Printemps)", category: 'nightlife',
+    address: "2 Rue du Havre, 75009 Paris, France",
+    note: "Perruche rooftop bar chain — Printemps location. Stunning views" },
+  { name: "Rooftop — Montmartre", category: 'nightlife',
+    address: "12 Rue Joseph de Maistre, 75018 Paris, France",
+    note: "Rooftop bar in Montmartre" },
+  { name: "Rooftop — Le Marais", category: 'nightlife',
+    address: "243 Rue Saint-Martin, 75003 Paris, France",
+    note: "Rooftop bar in Le Marais" },
+  { name: "Rooftop — Peninsula Hotel", category: 'nightlife',
+    address: "19 Avenue Kléber, 75116 Paris, France",
+    note: "Fancy rooftop at the Peninsula hotel — near Arc de Triomphe" },
+  { name: "Rue Mouffetard — Crêperies until 5am 🥞", category: 'nightlife',
+    address: "Rue Mouffetard, 75005 Paris, France",
+    note: "Famous student street near the Sorbonne — crêperies open until 5am" },
 ];
 
+// ── MAP ───────────────────────────────────────────────────────────────────────
 const map = L.map('map', { center: [48.8700, 2.3300], zoom: 13, zoomControl: false });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19
+}).addTo(map);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
+// ── ICONS & POPUPS ────────────────────────────────────────────────────────────
 function makeIcon(cat, isHotel) {
   const c = CATS[cat] || CATS.poi;
-  const size = isHotel ? 36 : 28, radius = isHotel ? '8px' : '50%';
-  return L.divIcon({ className: '', html: `<div class="cm" style="width:${size}px;height:${size}px;background:${c.color};border-radius:${radius};">${c.icon}</div>`, iconSize: [size,size], iconAnchor: [size/2,size/2], popupAnchor: [0,-(size/2+4)] });
+  const size = isHotel ? 36 : 28, r = isHotel ? '8px' : '50%';
+  return L.divIcon({ className: '',
+    html: `<div class="cm" style="width:${size}px;height:${size}px;background:${c.color};border-radius:${r};">${c.icon}</div>`,
+    iconSize: [size,size], iconAnchor: [size/2,size/2], popupAnchor: [0,-(size/2+4)] });
 }
 
 function makePopup(p) {
   const c = CATS[p.category] || CATS.poi;
-  const q = encodeURIComponent((p.address || p.name) + ' Paris');
-  return `<div class="popup-inner"><span class="popup-cat" style="background:${c.color}">${c.icon} ${c.label}</span><div class="popup-name">${p.name}</div>${p.genre?`<div class="popup-genre">🍴 ${p.genre}</div>`:''} ${p.address?`<div class="popup-addr">📍 ${p.address}</div>`:''} ${p.note?`<div class="popup-note">${p.note}</div>`:''}<a class="popup-gmaps" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Open in Google Maps ↗</a></div>`;
+  const q = encodeURIComponent(p.address || p.name);
+  return `<div class="popup-inner">
+    <span class="popup-cat" style="background:${c.color}">${c.icon} ${c.label}</span>
+    <div class="popup-name">${p.name}</div>
+    ${p.genre   ? `<div class="popup-genre">🍴 ${p.genre}</div>` : ''}
+    ${p.address ? `<div class="popup-addr">📍 ${p.address.replace(', France','')}</div>` : ''}
+    ${p.note    ? `<div class="popup-note">${p.note}</div>` : ''}
+    <a class="popup-gmaps" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Open in Google Maps ↗</a>
+  </div>`;
 }
 
-const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 45,
-  iconCreateFunction(g) { const n=g.getChildCount(); return L.divIcon({html:`<div style="background:#2563eb;color:#fff;width:32px;height:32px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.3);">${n}</div>`,className:'',iconSize:[32,32]}); }
-});
-
-const markers = PLACES.map((p,i) => {
-  const isHotel = p.category==='hotel';
-  const m = L.marker([p.lat,p.lng],{icon:makeIcon(p.category,isHotel)});
-  m.bindPopup(makePopup(p),{maxWidth:270}); m._placeIndex=i;
-  if(isHotel) m.addTo(map); else cluster.addLayer(m);
-  return m;
+// ── CLUSTER & MARKERS ─────────────────────────────────────────────────────────
+const cluster = L.markerClusterGroup({
+  showCoverageOnHover: false, maxClusterRadius: 45,
+  iconCreateFunction(g) {
+    return L.divIcon({ html: `<div style="background:#2563eb;color:#fff;width:32px;height:32px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.3);">${g.getChildCount()}</div>`, className:'', iconSize:[32,32] });
+  }
 });
 cluster.addTo(map);
 
+const markers = new Array(PLACES.length).fill(null);
 const activeFilters = new Set(Object.keys(CATS));
+
+function addMarkerForPlace(p, i) {
+  if (!p.lat || !p.lng) return;
+  const isHotel = p.category === 'hotel';
+  const m = L.marker([p.lat, p.lng], { icon: makeIcon(p.category, isHotel) });
+  m.bindPopup(makePopup(p), { maxWidth: 270 });
+  markers[i] = m;
+  if (isHotel) {
+    m.addTo(map);
+  } else if (activeFilters.has(p.category)) {
+    cluster.addLayer(m);
+  }
+}
+
+// Add hardcoded places immediately
+PLACES.forEach((p, i) => { if (p.lat && p.lng) addMarkerForPlace(p, i); });
+
+// ── FILTERS ───────────────────────────────────────────────────────────────────
 const filtersEl = document.getElementById('filters');
-Object.entries(CATS).forEach(([key,c]) => {
-  if(!PLACES.some(p=>p.category===key)) return;
-  const btn=document.createElement('button'); btn.className='filter-btn'; btn.dataset.cat=key;
-  btn.style.cssText=`background:${c.bg};color:${c.text};border-color:${c.color}`; btn.innerHTML=`${c.icon} ${c.label}`;
-  btn.addEventListener('click',()=>{ activeFilters.has(key)?activeFilters.delete(key):activeFilters.add(key); btn.classList.toggle('off',!activeFilters.has(key)); refreshList(); refreshMarkers(); });
+Object.entries(CATS).forEach(([key, c]) => {
+  if (!PLACES.some(p => p.category === key)) return;
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn'; btn.dataset.cat = key;
+  btn.style.cssText = `background:${c.bg};color:${c.text};border-color:${c.color}`;
+  btn.innerHTML = `${c.icon} ${c.label}`;
+  btn.addEventListener('click', () => {
+    activeFilters.has(key) ? activeFilters.delete(key) : activeFilters.add(key);
+    btn.classList.toggle('off', !activeFilters.has(key));
+    refreshList(); refreshMarkers();
+  });
   filtersEl.appendChild(btn);
 });
 
-const listEl=document.getElementById('place-list'), countEl=document.getElementById('place-count'), searchEl=document.getElementById('search-box');
-let activeItem=null;
-function refreshList(){
-  const q=searchEl.value.toLowerCase();
-  const visible=PLACES.map((p,i)=>({p,i})).filter(({p})=>activeFilters.has(p.category)&&[p.name,p.genre||'',p.address||'',p.note||''].some(s=>s.toLowerCase().includes(q)));
-  listEl.innerHTML='';
-  visible.forEach(({p,i})=>{
-    const c=CATS[p.category]||CATS.poi;
-    const el=document.createElement('div'); el.className='place-item'; el.dataset.idx=i;
-    el.innerHTML=`<div class="place-dot" style="background:${c.color}">${c.icon}</div><div><div class="place-name">${p.name}</div><div class="place-meta">${p.genre?p.genre+' · ':''}${c.label}${p.address?' · '+p.address.split(',')[0]:''}</div></div>`;
-    el.addEventListener('click',()=>{ map.flyTo([p.lat,p.lng],17,{duration:0.7}); markers[i].openPopup(); if(activeItem)activeItem.classList.remove('active'); el.classList.add('active'); activeItem=el; sidebar.classList.remove('open'); fab.textContent='☰'; });
+// ── PLACE LIST ────────────────────────────────────────────────────────────────
+const listEl   = document.getElementById('place-list');
+const countEl  = document.getElementById('place-count');
+const searchEl = document.getElementById('search-box');
+let activeItem = null;
+
+function refreshList() {
+  const q = searchEl.value.toLowerCase();
+  const visible = PLACES.map((p,i) => ({p,i})).filter(({p}) =>
+    activeFilters.has(p.category) &&
+    [p.name, p.genre||'', p.address||'', p.note||''].some(s => s.toLowerCase().includes(q))
+  );
+  listEl.innerHTML = '';
+  const ready = markers.filter(Boolean).length;
+  visible.forEach(({p,i}) => {
+    const c = CATS[p.category] || CATS.poi;
+    const loaded = !!markers[i];
+    const el = document.createElement('div');
+    el.className = 'place-item' + (loaded ? '' : ' pending');
+    el.innerHTML = `
+      <div class="place-dot" style="background:${c.color}">${c.icon}</div>
+      <div>
+        <div class="place-name">${p.name}</div>
+        <div class="place-meta">${p.genre ? p.genre+' · ' : ''}${c.label}${p.address ? ' · '+p.address.split(',')[0] : ''}${loaded?'':' · pinning…'}</div>
+      </div>`;
+    if (loaded) {
+      el.addEventListener('click', () => {
+        map.flyTo([p.lat, p.lng], 17, { duration: 0.7 });
+        markers[i].openPopup();
+        if (activeItem) activeItem.classList.remove('active');
+        el.classList.add('active'); activeItem = el;
+        sidebar.classList.remove('open'); fab.textContent = '☰';
+      });
+    }
     listEl.appendChild(el);
   });
-  countEl.textContent=`${visible.length} of ${PLACES.length} places`;
+  countEl.textContent = `${visible.length} places · ${ready} pinned`;
 }
-function refreshMarkers(){ cluster.clearLayers(); PLACES.forEach((p,i)=>{ if(p.category!=='hotel'&&activeFilters.has(p.category)) cluster.addLayer(markers[i]); }); }
-searchEl.addEventListener('input',refreshList);
+
+function refreshMarkers() {
+  cluster.clearLayers();
+  PLACES.forEach((p,i) => {
+    if (markers[i] && p.category !== 'hotel' && activeFilters.has(p.category)) cluster.addLayer(markers[i]);
+  });
+}
+
+searchEl.addEventListener('input', refreshList);
 refreshList();
 
+// ── GEOCODING (runs in your browser, caches in localStorage) ──────────────────
+const CACHE_KEY = 'paris-geocache-v2';
+let geoCache = {};
+try { geoCache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) {}
+
+const geoBar   = document.getElementById('geo-bar');
+const geoLabel = document.getElementById('geo-label');
+const geoFill  = document.getElementById('geo-fill');
+const total    = PLACES.length;
+
+function updateGeoBar(done) {
+  const pct = Math.round(done / total * 100);
+  geoFill.style.width = pct + '%';
+  const remaining = PLACES.slice(done).filter(p => !p.lat).length;
+  if (remaining === 0) { geoBar.classList.add('done'); return; }
+  geoLabel.textContent = `📍 Pinning places… ${done}/${total}`;
+}
+
+async function geocodeAll() {
+  let done = 0;
+  for (let i = 0; i < PLACES.length; i++) {
+    const p = PLACES[i];
+    if (!p.lat || !p.lng) {
+      const cacheHit = geoCache[p.address];
+      if (cacheHit) {
+        p.lat = cacheHit[0]; p.lng = cacheHit[1];
+        addMarkerForPlace(p, i);
+      } else {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(p.address)}&format=json&limit=1&countrycodes=fr,be`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const data = await res.json();
+            if (data[0]) {
+              p.lat = +data[0].lat; p.lng = +data[0].lon;
+              geoCache[p.address] = [p.lat, p.lng];
+              try { localStorage.setItem(CACHE_KEY, JSON.stringify(geoCache)); } catch(e) {}
+              addMarkerForPlace(p, i);
+            }
+          }
+        } catch(e) {}
+        await new Promise(r => setTimeout(r, 1100));
+      }
+    }
+    done++;
+    updateGeoBar(done);
+    refreshList();
+  }
+}
+
+geocodeAll();
+
+// ── HOME BUTTON ───────────────────────────────────────────────────────────────
 new (L.Control.extend({
-  options:{position:'topright'},
-  onAdd(){
-    const btn=L.DomUtil.create('button'); btn.innerHTML='🏠'; btn.title='Back to hotel';
-    btn.style.cssText='width:34px;height:34px;border-radius:6px;border:none;background:#fff;font-size:16px;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;margin-top:4px;';
-    L.DomEvent.on(btn,'click',()=>{ map.flyTo([48.8875,2.3433],15,{duration:0.8}); markers[0].openPopup(); });
+  options: { position: 'topright' },
+  onAdd() {
+    const btn = L.DomUtil.create('button');
+    btn.innerHTML = '🏠'; btn.title = 'Back to hotel';
+    btn.style.cssText = 'width:34px;height:34px;border-radius:6px;border:none;background:#fff;font-size:16px;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;margin-top:4px;';
+    L.DomEvent.on(btn, 'click', () => { map.flyTo([48.8875, 2.3433], 15, { duration: 0.8 }); markers[0].openPopup(); });
     return btn;
   }
 }))().addTo(map);
 
-const sidebar=document.getElementById('sidebar'), fab=document.getElementById('mobile-toggle');
-fab.addEventListener('click',()=>{ sidebar.classList.toggle('open'); fab.textContent=sidebar.classList.contains('open')?'✕':'☰'; });
-map.on('click',()=>{ sidebar.classList.remove('open'); fab.textContent='☰'; });
+// ── MOBILE ────────────────────────────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+const fab = document.getElementById('mobile-toggle');
+fab.addEventListener('click', () => { sidebar.classList.toggle('open'); fab.textContent = sidebar.classList.contains('open') ? '✕' : '☰'; });
+map.on('click', () => { sidebar.classList.remove('open'); fab.textContent = '☰'; });
 </script>
 </body>
 </html>
