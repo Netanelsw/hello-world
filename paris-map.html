@@ -156,7 +156,6 @@ const CATS = {
 const PLACES = [
   // HOTEL
   { name: "Mom'art Paris", category: 'hotel',
-    lat: 48.8875, lng: 2.3433,
     address: "24 Rue Lamarck, 75018 Paris, France",
     note: "Your base in Montmartre 🏠" },
 
@@ -690,7 +689,7 @@ new (L.Control.extend({
     const btn = L.DomUtil.create('button');
     btn.innerHTML = '🏠'; btn.title = 'Back to hotel';
     btn.style.cssText = 'width:34px;height:34px;border-radius:6px;border:none;background:#fff;font-size:16px;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;margin-top:4px;';
-    L.DomEvent.on(btn, 'click', () => { map.flyTo([48.8875, 2.3433], 15, { duration: 0.8 }); markers[0].openPopup(); });
+    L.DomEvent.on(btn, 'click', () => { const h = PLACES[0]; if (h.lat) { map.flyTo([h.lat, h.lng], 15, { duration: 0.8 }); if (markers[0]) markers[0].openPopup(); } });
     return btn;
   }
 }))().addTo(map);
