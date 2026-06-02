@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Paris Trip Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -26,6 +29,12 @@
     #sidebar-header { padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
     #sidebar-header h1 { font-size: 15px; font-weight: 700; }
     #sidebar-header p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    #reset-btn {
+      margin-top: 8px; padding: 4px 10px; font-size: 10px; font-weight: 700;
+      border-radius: 6px; border: 1px solid var(--border); background: var(--surface);
+      color: var(--muted); cursor: pointer;
+    }
+    #reset-btn:active { transform: scale(.96); }
 
     /* geocoding progress bar */
     #geo-bar {
@@ -116,7 +125,8 @@
   <div id="sidebar">
     <div id="sidebar-header">
       <h1>🗺️ Paris Trip Map</h1>
-      <p>Mom'art Hotel · Montmartre</p>
+      <p>Mom'art Hotel · 42 Rue d'Orsel, Montmartre</p>
+      <button id="reset-btn" title="Re-pin everything from scratch">↻ Reset pins</button>
     </div>
     <div id="geo-bar">
       <div id="geo-label">📍 Pinning places on map… 0 / 0</div>
@@ -537,8 +547,12 @@ function addMarkerForPlace(p, i) {
   const m = L.marker([p.lat, p.lng], { icon: makeIcon(p.category, isHotel) });
   m.bindPopup(makePopup(p), { maxWidth: 270 });
   markers[i] = m;
-  if (isHotel) { m.addTo(map); }
-  else if (activeFilters.has(p.category)) { cluster.addLayer(m); }
+  if (isHotel) {
+    m.addTo(map);
+    map.setView([p.lat, p.lng], 14);
+  } else if (activeFilters.has(p.category)) {
+    cluster.addLayer(m);
+  }
 }
 
 PLACES.forEach((p, i) => { if (p.lat && p.lng) addMarkerForPlace(p, i); });
@@ -606,7 +620,7 @@ function refreshMarkers() {
 searchEl.addEventListener('input', refreshList);
 refreshList();
 
-const CACHE_KEY = 'paris-geocache-v3';
+const CACHE_KEY = 'paris-geocache-v4';
 let geoCache = {};
 try { geoCache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) {}
 
@@ -623,6 +637,30 @@ function updateGeoBar(done) {
   geoLabel.textContent = `📍 Pinning places… ${done}/${total}`;
 }
 
+// Look an address up. Try Nominatim, fall back to Photon if it's blocked/rate-limited.
+async function geocode(address) {
+  try {
+    const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=fr`;
+    const r = await fetch(u, { headers: { 'Accept': 'application/json' } });
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d[0]) return [ +d[0].lat, +d[0].lon ];
+    }
+  } catch(e) {}
+  try {
+    const u = `https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1`;
+    const r = await fetch(u);
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d.features && d.features[0]) {
+        const c = d.features[0].geometry.coordinates; // [lon, lat]
+        return [ c[1], c[0] ];
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
 async function geocodeAll() {
   let done = 0;
   for (let i = 0; i < PLACES.length; i++) {
@@ -633,19 +671,13 @@ async function geocodeAll() {
         p.lat = cacheHit[0]; p.lng = cacheHit[1];
         addMarkerForPlace(p, i);
       } else {
-        try {
-          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(p.address)}&format=json&limit=1&countrycodes=fr,be`;
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data[0]) {
-              p.lat = +data[0].lat; p.lng = +data[0].lon;
-              geoCache[p.address] = [p.lat, p.lng];
-              try { localStorage.setItem(CACHE_KEY, JSON.stringify(geoCache)); } catch(e) {}
-              addMarkerForPlace(p, i);
-            }
-          }
-        } catch(e) {}
+        const coords = await geocode(p.address);
+        if (coords) {
+          p.lat = coords[0]; p.lng = coords[1];
+          geoCache[p.address] = coords;
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify(geoCache)); } catch(e) {}
+          addMarkerForPlace(p, i);
+        }
         await new Promise(r => setTimeout(r, 1100));
       }
     }
@@ -672,6 +704,12 @@ const sidebar = document.getElementById('sidebar');
 const fab = document.getElementById('mobile-toggle');
 fab.addEventListener('click', () => { sidebar.classList.toggle('open'); fab.textContent = sidebar.classList.contains('open') ? '✕' : '☰'; });
 map.on('click', () => { sidebar.classList.remove('open'); fab.textContent = '☰'; });
+
+// Reset: wipe the cached coordinates and re-pin everything from scratch
+document.getElementById('reset-btn').addEventListener('click', () => {
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  location.reload();
+});
 </script>
 </body>
 </html>
