@@ -134,7 +134,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-// ── CATEGORIES ───────────────────────────────────────────────────────────────
 const CATS = {
   hotel:      { label: 'Hotel',             icon: '🏨', color: '#f59e0b', bg: '#fef3c7', text: '#92400e' },
   french:     { label: 'French',            icon: '🍷', color: '#dc2626', bg: '#fee2e2', text: '#7f1d1d' },
@@ -151,12 +150,10 @@ const CATS = {
   poi:        { label: 'Sights & Streets',  icon: '📍', color: '#374151', bg: '#f3f4f6', text: '#111827' },
 };
 
-// ── PLACES ───────────────────────────────────────────────────────────────────
-// lat/lng = hardcoded for well-known landmarks; omitted = geocoded on first open
 const PLACES = [
   // HOTEL
   { name: "Mom'art Paris", category: 'hotel',
-    address: "24 Rue Lamarck, 75018 Paris, France",
+    address: "42 Rue d'Orsel, 75018 Paris, France",
     note: "Your base in Montmartre 🏠" },
 
   // FRENCH RESTAURANTS
@@ -389,7 +386,7 @@ const PLACES = [
     address: "Place Maubert, 75005 Paris, France",
     note: "Open Tuesday, Thursday & Saturday" },
 
-  // PARKS & GARDENS — hardcoded, well-known
+  // PARKS & GARDENS
   { name: "Jardin du Luxembourg", category: 'poi',
     lat: 48.8462, lng: 2.3372,
     address: "Jardin du Luxembourg, 75006 Paris, France",
@@ -448,23 +445,11 @@ const PLACES = [
     address: "Rue Princesse, 75006 Paris, France",
     note: "Great bar street in the 6th arr. — lively at night" },
 
-  // ICONIC LANDMARKS — hardcoded
+  // LANDMARK
   { name: "Sacré-Cœur Basilica", category: 'poi',
     lat: 48.8867, lng: 2.3431,
     address: "Sacré-Cœur, Montmartre, 75018 Paris, France",
     note: "10 min walk from the hotel" },
-  { name: "Eiffel Tower", category: 'poi',
-    lat: 48.8584, lng: 2.2945,
-    address: "Tour Eiffel, 75007 Paris, France" },
-  { name: "Louvre Museum", category: 'poi',
-    lat: 48.8606, lng: 2.3376,
-    address: "Musée du Louvre, 75001 Paris, France" },
-  { name: "Musée d'Orsay", category: 'poi',
-    lat: 48.8600, lng: 2.3266,
-    address: "Musée d'Orsay, 75007 Paris, France" },
-  { name: "Notre-Dame Cathedral", category: 'poi',
-    lat: 48.8530, lng: 2.3499,
-    address: "Cathédrale Notre-Dame de Paris, France" },
 
   // NIGHTLIFE
   { name: "Irish Pub (Grands Boulevards)", category: 'nightlife',
@@ -508,14 +493,12 @@ const PLACES = [
     note: "Famous student street near the Sorbonne — crêperies open until 5am" },
 ];
 
-// ── MAP ───────────────────────────────────────────────────────────────────────
 const map = L.map('map', { center: [48.8700, 2.3300], zoom: 13, zoomControl: false });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19
 }).addTo(map);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
-// ── ICONS & POPUPS ────────────────────────────────────────────────────────────
 function makeIcon(cat, isHotel) {
   const c = CATS[cat] || CATS.poi;
   const size = isHotel ? 36 : 28, r = isHotel ? '8px' : '50%';
@@ -537,7 +520,6 @@ function makePopup(p) {
   </div>`;
 }
 
-// ── CLUSTER & MARKERS ─────────────────────────────────────────────────────────
 const cluster = L.markerClusterGroup({
   showCoverageOnHover: false, maxClusterRadius: 45,
   iconCreateFunction(g) {
@@ -555,17 +537,12 @@ function addMarkerForPlace(p, i) {
   const m = L.marker([p.lat, p.lng], { icon: makeIcon(p.category, isHotel) });
   m.bindPopup(makePopup(p), { maxWidth: 270 });
   markers[i] = m;
-  if (isHotel) {
-    m.addTo(map);
-  } else if (activeFilters.has(p.category)) {
-    cluster.addLayer(m);
-  }
+  if (isHotel) { m.addTo(map); }
+  else if (activeFilters.has(p.category)) { cluster.addLayer(m); }
 }
 
-// Add hardcoded places immediately
 PLACES.forEach((p, i) => { if (p.lat && p.lng) addMarkerForPlace(p, i); });
 
-// ── FILTERS ───────────────────────────────────────────────────────────────────
 const filtersEl = document.getElementById('filters');
 Object.entries(CATS).forEach(([key, c]) => {
   if (!PLACES.some(p => p.category === key)) return;
@@ -581,7 +558,6 @@ Object.entries(CATS).forEach(([key, c]) => {
   filtersEl.appendChild(btn);
 });
 
-// ── PLACE LIST ────────────────────────────────────────────────────────────────
 const listEl   = document.getElementById('place-list');
 const countEl  = document.getElementById('place-count');
 const searchEl = document.getElementById('search-box');
@@ -630,8 +606,7 @@ function refreshMarkers() {
 searchEl.addEventListener('input', refreshList);
 refreshList();
 
-// ── GEOCODING (runs in your browser, caches in localStorage) ──────────────────
-const CACHE_KEY = 'paris-geocache-v2';
+const CACHE_KEY = 'paris-geocache-v3';
 let geoCache = {};
 try { geoCache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) {}
 
@@ -682,7 +657,6 @@ async function geocodeAll() {
 
 geocodeAll();
 
-// ── HOME BUTTON ───────────────────────────────────────────────────────────────
 new (L.Control.extend({
   options: { position: 'topright' },
   onAdd() {
@@ -694,7 +668,6 @@ new (L.Control.extend({
   }
 }))().addTo(map);
 
-// ── MOBILE ────────────────────────────────────────────────────────────────────
 const sidebar = document.getElementById('sidebar');
 const fab = document.getElementById('mobile-toggle');
 fab.addEventListener('click', () => { sidebar.classList.toggle('open'); fab.textContent = sidebar.classList.contains('open') ? '✕' : '☰'; });
