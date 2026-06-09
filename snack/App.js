@@ -449,7 +449,7 @@ function Tabs() {
       tabBarStyle: { backgroundColor: C.white, borderTopColor: C.border, height: 60, paddingBottom: 8 },
       tabBarIcon: ({ focused, color, size }) => {
         const t = tabs.find(t => t.name === route.name);
-        return <Ionicons name={focused ? t.icon : `${t.icon}-outline`} size={size} color={color} />;
+        return <Ionicons name={focused ? t.icon : t.icon + '-outline'} size={size} color={color} />;
       },
     })}>
       {tabs.map(t => <Tab.Screen key={t.name} name={t.name} component={t.comp} />)}
